@@ -8,12 +8,14 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&display=swap" rel="stylesheet" />
 
-    <!-- Nenhum <script> de SDK do Bitrix aqui de propósito: em on-premise, o
-         próprio portal injeta rest.client.min.js/rest.bundle.min.js no iframe
-         do app (confirmado via DevTools) e expõe window.BX24 sozinho. Um
-         <script src="https://api.bitrix24.com/..."> aqui é Cloud-only e
-         conflita/atrasa a injeção real — foi removido por isso. Fora do
-         Bitrix, window.BX24 simplesmente permanece undefined. -->
+    <!-- SDK REST do Bitrix24: é o app que precisa carregá-lo (o portal NÃO
+         injeta nada dentro do iframe). Este loader é o caminho documentado e
+         serve tanto Cloud quanto on-premise, desde que o portal tenha acesso
+         à internet. Sem ele, window.BX24 fica undefined e installFinish()
+         nunca roda. Protocolo relativo (//) para não quebrar em portal http.
+         Fora do Bitrix (URL direta da Vercel), o script simplesmente não
+         define BX24 — tratado em InstalacaoBitrix.jsx. -->
+    <script src="//api.bitrix24.com/api/v1/"></script>
   </head>
   <body>
     <div id="root"></div>
