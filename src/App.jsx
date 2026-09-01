@@ -14,8 +14,10 @@ import {
   salvarLinhaEquipe,
   excluirLinhaEquipe,
   buscarTarefasEquipeCobranca,
+  buscarPermissoesEfetivas,
   excluirPermissao,
 } from './services/equipeCobrancaApi.js';
+import { obterUsuarioAtual } from './services/bitrixSdk.js';
 
 const FORM_VAZIO = { nome: '', polo: '', eh48h: false, digitosCpf: [], advogado: '', departamento: '', sugestoesVisiveis: false };
 const FILTROS_VAZIOS = { advogado: 'todos', escalao48h: 'todos', digitoCpf: 'todos', buscaTexto: '', apenasConcluidas: false };
@@ -50,15 +52,29 @@ export default function App() {
   const corPolo = useMemo(() => Object.fromEntries(polos.map((p) => [p.codigo, corDoPolo(p.codigo, polos)])), [polos]);
   const codigosPolo = useMemo(() => polos.map((p) => p.codigo), [polos]);
 
-  const carregarEquipe = useCallback(async () => {
-    const { equipes, polos: polosApi } = await buscarEquipeCobranca(null);
+  // Quem está usando o app (via BX24). Null fora do Bitrix — nesse caso o
+  // backend não reconhece ninguém como editor e a tela fica só de leitura.
+  const [usuario, setUsuario] = useState(null);
+  const [podeEditar, setPodeEditar] = useState(false);
+
+  const carregarEquipe = useCallback(async (solicitante) => {
+    const { equipes, polos: polosApi } = await buscarEquipeCobranca(solicitante);
     setRegras(equipes);
     setPolos(polosApi);
   }, []);
 
   useEffect(() => {
-    carregarEquipe();
-    buscarTarefasEquipeCobranca(null).then(setTarefas);
+    let cancelado = false;
+    obterUsuarioAtual().then(async (atual) => {
+      if (cancelado) return;
+      setUsuario(atual);
+      await carregarEquipe(atual);
+      if (cancelado) return;
+      buscarTarefasEquipeCobranca(atual).then((t) => { if (!cancelado) setTarefas(t); });
+      const efetivas = await buscarPermissoesEfetivas(atual);
+      if (!cancelado) setPodeEditar(Boolean(efetivas?.podeVer?.colaboradores));
+    });
+    return () => { cancelado = true; };
   }, [carregarEquipe]);
 
   useEffect(() => () => clearTimeout(toastTimer.current), []);
@@ -100,18 +116,22 @@ export default function App() {
       advogado: form.advogado.trim() || null,
       digitosCpf: form.eh48h ? [] : form.digitosCpf,
       ehEscalao48h: form.eh48h,
+      // Identifica o autor da alteração: o backend usa isso tanto para o
+      // controle de permissão quanto para o log de auditoria.
+      solicitanteId: usuario?.id ?? null,
+      solicitanteNome: usuario?.nome ?? null,
     };
     const salvo = await salvarLinhaEquipe(input, indiceEmEdicao ?? undefined);
-    if (!salvo) { mostrarToast('Não foi possível salvar — confira a conexão com o backend.'); return; }
-    await carregarEquipe();
+    if (!salvo) { mostrarToast('Não foi possível salvar — sem permissão ou backend fora do ar.'); return; }
+    await carregarEquipe(usuario);
     setModalAberto(false);
     mostrarToast('Colaborador ' + salvo.colaboradorNome + ' salvo com sucesso.');
   }
 
   async function excluirMembro(regra) {
-    const ok = await excluirLinhaEquipe(regra.id);
-    if (!ok) { mostrarToast('Não foi possível remover — confira a conexão com o backend.'); return; }
-    await carregarEquipe();
+    const ok = await excluirLinhaEquipe(regra.id, usuario);
+    if (!ok) { mostrarToast('Não foi possível remover — sem permissão ou backend fora do ar.'); return; }
+    await carregarEquipe(usuario);
     mostrarToast(regra.colaboradorNome + ' removido das regras.');
   }
 
@@ -153,6 +173,7 @@ export default function App() {
             polos={codigosPolo}
             poloLabels={poloLabels}
             corPolo={corPolo}
+            podeEditar={podeEditar}
             busca={buscaColab}
             setBusca={setBuscaColab}
             filtroPolo={filtroPolo}

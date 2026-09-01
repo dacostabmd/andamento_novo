@@ -72,8 +72,10 @@ export async function salvarLinhaEquipe(input, id) {
   return dados?.equipe ?? null
 }
 
-export async function excluirLinhaEquipe(id) {
-  const dados = await chamar(`/equipe-cobranca/${id}`, { method: 'DELETE' })
+export async function excluirLinhaEquipe(id, solicitante) {
+  const params = paramsSolicitante(solicitante)
+  const query = params.toString() ? `?${params.toString()}` : ''
+  const dados = await chamar(`/equipe-cobranca/${id}${query}`, { method: 'DELETE' })
   return Boolean(dados?.success)
 }
 

@@ -5,7 +5,7 @@ import { iniciais, pillStyle } from '../data.js';
 const TH = 'text-align:left;padding:12px 16px;font-weight:700;font-size:11.5px;color:rgba(236,230,216,0.6);border-bottom:1px solid rgba(199,199,199,0.16);';
 const INPUT = 'background:#161616;border:1px solid rgba(199,199,199,0.25);border-radius:8px;padding:10px 12px;color:#ECE6D8;font-family:inherit;font-size:13px;';
 
-export default function Colaboradores({ regras, polos, poloLabels, corPolo, busca, setBusca, filtroPolo, setFiltroPolo, onNovo, onEditar, onExcluir }) {
+export default function Colaboradores({ regras, polos, poloLabels, corPolo, podeEditar, busca, setBusca, filtroPolo, setFiltroPolo, onNovo, onEditar, onExcluir }) {
   const buscaNorm = busca.trim().toLowerCase();
   const filtradas = regras.filter((r) => {
     if (filtroPolo !== 'todos' && r.polo !== filtroPolo) return false;
@@ -39,10 +39,12 @@ export default function Colaboradores({ regras, polos, poloLabels, corPolo, busc
               style={{ ...s(INPUT), width: '100%', paddingLeft: '36px' }}
             />
           </div>
-          <button className="btn-gold" onClick={onNovo} style={s('display:flex;align-items:center;gap:8px;background:#846419;color:#f5eec9;border:1px solid #846419;border-radius:8px;padding:10px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;')}>
-            <IconPlus />
-            Novo Colaborador
-          </button>
+          {podeEditar && (
+            <button className="btn-gold" onClick={onNovo} style={s('display:flex;align-items:center;gap:8px;background:#846419;color:#f5eec9;border:1px solid #846419;border-radius:8px;padding:10px 16px;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit;')}>
+              <IconPlus />
+              Novo Colaborador
+            </button>
+          )}
         </div>
 
         <div style={s('display:flex;gap:8px;flex-wrap:wrap;margin-top:14px;')}>
@@ -105,14 +107,18 @@ export default function Colaboradores({ regras, polos, poloLabels, corPolo, busc
                     )}
                   </td>
                   <td style={s('padding:11px 16px;text-align:center;')}>
-                    <div style={s('display:flex;gap:6px;justify-content:center;')}>
-                      <button className="icon-btn" onClick={() => onEditar(item)} style={s('background:transparent;border:1px solid rgba(199,199,199,0.25);color:rgba(236,230,216,0.7);border-radius:6px;padding:6px;cursor:pointer;display:flex;')}>
-                        <IconEdit />
-                      </button>
-                      <button className="icon-btn-danger" onClick={() => onExcluir(item)} style={s('background:transparent;border:1px solid rgba(199,199,199,0.25);color:rgba(236,230,216,0.7);border-radius:6px;padding:6px;cursor:pointer;display:flex;')}>
-                        <IconTrash />
-                      </button>
-                    </div>
+                    {podeEditar ? (
+                      <div style={s('display:flex;gap:6px;justify-content:center;')}>
+                        <button className="icon-btn" onClick={() => onEditar(item)} style={s('background:transparent;border:1px solid rgba(199,199,199,0.25);color:rgba(236,230,216,0.7);border-radius:6px;padding:6px;cursor:pointer;display:flex;')}>
+                          <IconEdit />
+                        </button>
+                        <button className="icon-btn-danger" onClick={() => onExcluir(item)} style={s('background:transparent;border:1px solid rgba(199,199,199,0.25);color:rgba(236,230,216,0.7);border-radius:6px;padding:6px;cursor:pointer;display:flex;')}>
+                          <IconTrash />
+                        </button>
+                      </div>
+                    ) : (
+                      <span style={s('font-size:11px;color:rgba(236,230,216,0.3);')}>—</span>
+                    )}
                   </td>
                 </tr>
               );
