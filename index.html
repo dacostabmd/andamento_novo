@@ -7,6 +7,11 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&display=swap" rel="stylesheet" />
+
+    <!-- SDK do Bitrix24: injeta window.BX24 quando o app roda embutido como widget.
+         Fora do Bitrix (ex.: acesso direto pela URL da Vercel), o script falha e
+         window.BX24 permanece undefined — tratado nos componentes que o usam. -->
+    <script src="https://api.bitrix24.com/api/v1/"></script>
   </head>
   <body>
     <div id="root"></div>

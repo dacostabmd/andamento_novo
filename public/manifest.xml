@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<manifest>
+  <app id="equipe.cobranca.andamento.processual" version="0.0.1">
+    <name lang="pt">Equipe de Cobrança — Andamento Processual</name>
+    <description lang="pt">Cadastro de cobradores e advogados por polo e roteamento de CPF/CNPJ</description>
+    <icon>favicon.svg</icon>
+    <url>/index.html</url>
+    <install_url>/index.html#install</install_url>
+    <rights>
+      <right id="task">
+        <title lang="pt">Leitura de Tarefas</title>
+      </right>
+      <right id="user">
+        <title lang="pt">Informações de Usuário</title>
+      </right>
+      <right id="department">
+        <title lang="pt">Informações de Departamento</title>
+      </right>
+    </rights>
+    <install>
+      <title lang="pt">Instalação da Equipe de Cobrança</title>
+    </install>
+  </app>
+</manifest>

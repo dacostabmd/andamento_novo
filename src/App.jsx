@@ -8,6 +8,7 @@ import Permissoes from './components/Permissoes.jsx';
 import ModalColaborador from './components/ModalColaborador.jsx';
 import ModalPolo from './components/ModalPolo.jsx';
 import PickerUsuarios from './components/PickerUsuarios.jsx';
+import InstalacaoBitrix from './components/InstalacaoBitrix.jsx';
 import { corDoPolo } from './data.js';
 import {
   buscarEquipeCobranca,
@@ -21,6 +22,8 @@ const FORM_VAZIO = { nome: '', polo: '', eh48h: false, digitosCpf: [], advogado:
 const FILTROS_VAZIOS = { advogado: 'todos', escalao48h: 'todos', digitoCpf: 'todos', buscaTexto: '', apenasConcluidas: false };
 
 export default function App() {
+  if (window.location.hash === '#install') return <InstalacaoBitrix />;
+
   const [screen, setScreen] = useState('dashboard');
   const [regras, setRegras] = useState([]);
   const [polos, setPolos] = useState([]);
