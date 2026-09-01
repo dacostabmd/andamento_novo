@@ -103,10 +103,19 @@ export async function excluirPermissao(usuarioId, solicitante) {
   return Boolean(dados?.success)
 }
 
-/** Tarefas reais já roteadas por polo/dígito de CPF, restritas à visibilidade do solicitante. */
+/**
+ * Tarefas reais já roteadas por polo/dígito de CPF.
+ *
+ * `escopoEquipeCobranca` só entra quando sabemos QUEM está pedindo: o
+ * /snapshot devolve lista VAZIA quando recebe o escopo sem `solicitanteId` e
+ * sem visibilidade total (ver server.ts) — era o que zerava todas as métricas
+ * do painel. Sem solicitante, pede o snapshot completo; o token de leitura já
+ * é o que controla o acesso nesse caso.
+ */
 export async function buscarTarefasEquipeCobranca(solicitante) {
   const params = paramsSolicitante(solicitante)
-  params.set('escopoEquipeCobranca', '1')
-  const dados = await chamar(`/snapshot?${params.toString()}`)
+  if (solicitante?.id != null) params.set('escopoEquipeCobranca', '1')
+  const query = params.toString() ? `?${params.toString()}` : ''
+  const dados = await chamar(`/snapshot${query}`)
   return Array.isArray(dados?.tarefas) ? dados.tarefas : []
 }
