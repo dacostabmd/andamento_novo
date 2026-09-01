@@ -17,18 +17,20 @@ export default function InstalacaoBitrix() {
 
     async function finalizar() {
       let tentativas = 0;
-      while ((typeof window.BX24 === 'undefined' || !window.BX24) && tentativas < 30) {
+      while ((typeof window.BX24 === 'undefined' || !window.BX24) && tentativas < 80) {
         await new Promise((r) => setTimeout(r, 100));
         tentativas++;
       }
       if (cancelado) return;
 
       if (typeof window.BX24 === 'undefined' || !window.BX24) {
+        console.error('[InstalacaoBitrix] window.BX24 não apareceu após 8s — o portal não injetou o SDK neste iframe.');
         setStatus('erro');
         setMensagem('BX24 não carregado. Verifique se o app está rodando dentro do Bitrix.');
         return;
       }
 
+      console.log('[InstalacaoBitrix] BX24 disponível, chamando installFinish()');
       window.BX24.installFinish();
       setStatus('sucesso');
       setMensagem('Instalação concluída com sucesso!');

@@ -8,10 +8,12 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400;500;600;700&display=swap" rel="stylesheet" />
 
-    <!-- SDK do Bitrix24: injeta window.BX24 quando o app roda embutido como widget.
-         Fora do Bitrix (ex.: acesso direto pela URL da Vercel), o script falha e
-         window.BX24 permanece undefined — tratado nos componentes que o usam. -->
-    <script src="https://api.bitrix24.com/api/v1/"></script>
+    <!-- Nenhum <script> de SDK do Bitrix aqui de propósito: em on-premise, o
+         próprio portal injeta rest.client.min.js/rest.bundle.min.js no iframe
+         do app (confirmado via DevTools) e expõe window.BX24 sozinho. Um
+         <script src="https://api.bitrix24.com/..."> aqui é Cloud-only e
+         conflita/atrasa a injeção real — foi removido por isso. Fora do
+         Bitrix, window.BX24 simplesmente permanece undefined. -->
   </head>
   <body>
     <div id="root"></div>
