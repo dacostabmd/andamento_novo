@@ -204,7 +204,32 @@ export default function ModalPolo({ polo, poloLabels, tarefas, onAbrirBitrix, on
                       style={s('border-bottom:1px solid rgba(199,199,199,0.08);cursor:pointer;')}
                       title="Clique para abrir no Bitrix24"
                     >
-                      <td style={s('padding:8px 10px;font-weight:600;')}>{t.clienteNome || t.titulo}</td>
+                      <td style={s('padding:8px 10px;font-weight:600;')}>
+                        <div>{t.clienteNome || t.titulo}</div>
+                        {(t.valorCobranca != null || t.situacaoFinanceira) && (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '3px', fontSize: '10.5px' }}>
+                            {t.valorCobranca != null && (
+                              <span style={{ color: '#f5dd90', fontWeight: 600 }}>
+                                R$ {Number(t.valorCobranca).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                              </span>
+                            )}
+                            {t.situacaoFinanceira && (
+                              <span
+                                style={{
+                                  backgroundColor: t.situacaoFinanceira.toUpperCase() === 'ADIMPLENTE' ? 'rgba(95,201,168,0.18)' : 'rgba(224,121,111,0.18)',
+                                  color: t.situacaoFinanceira.toUpperCase() === 'ADIMPLENTE' ? '#5fc9a8' : '#e0796f',
+                                  borderRadius: '3px',
+                                  padding: '1px 5px',
+                                  fontWeight: 700,
+                                  fontSize: '9.5px',
+                                }}
+                              >
+                                {t.situacaoFinanceira}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </td>
                       <td style={s('padding:8px 10px;font-weight:600;')}>{t.equipeCobrancaColaboradorNome || '—'}</td>
                       <td style={s('padding:8px 10px;color:rgba(236,230,216,0.85);')}>{t.equipeCobrancaAdvogado || 'Sem advogado'}</td>
                       <td style={s('padding:8px 10px;')}>

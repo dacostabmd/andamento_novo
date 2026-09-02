@@ -698,6 +698,29 @@ export default function ModalTarefasMetrica({
                             <strong style={{ color: 'rgba(236,230,216,0.45)' }}>Prazo:</strong>{' '}
                             {formatarPrazo(t.prazoFinal)}
                           </span>
+
+                          {t.valorCobranca != null ? (
+                            <span style={{ color: '#f5dd90', fontWeight: 600 }}>
+                              <strong style={{ color: 'rgba(236,230,216,0.45)' }}>Valor:</strong>{' '}
+                              R$ {Number(t.valorCobranca).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                            </span>
+                          ) : null}
+
+                          {t.situacaoFinanceira ? (
+                            <span
+                              style={{
+                                backgroundColor: t.situacaoFinanceira.toUpperCase() === 'ADIMPLENTE' ? 'rgba(95,201,168,0.18)' : 'rgba(224,121,111,0.18)',
+                                color: t.situacaoFinanceira.toUpperCase() === 'ADIMPLENTE' ? '#5fc9a8' : '#e0796f',
+                                border: '1px solid ' + (t.situacaoFinanceira.toUpperCase() === 'ADIMPLENTE' ? 'rgba(95,201,168,0.4)' : 'rgba(224,121,111,0.4)'),
+                                borderRadius: '4px',
+                                padding: '1px 6px',
+                                fontWeight: 700,
+                                fontSize: '10px',
+                              }}
+                            >
+                              Asaas: {t.situacaoFinanceira}
+                            </span>
+                          ) : null}
                         </div>
                       </div>
 
