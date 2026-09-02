@@ -112,7 +112,7 @@ export default function ModalPolo({ polo, poloLabels, tarefas, onAbrirBitrix, on
       <div
         className="modal-content"
         style={s(
-          'background:#111111;border:1px solid rgba(199,199,199,0.2);border-radius:14px;width:680px;max-height:85vh;display:flex;flex-direction:column;'
+          'background:#111111;border:1px solid rgba(199,199,199,0.2);border-radius:14px;width:850px;max-width:95vw;max-height:88vh;display:flex;flex-direction:column;'
         )}
       >
         <div style={s('display:flex;justify-content:space-between;align-items:center;padding:20px;')}>

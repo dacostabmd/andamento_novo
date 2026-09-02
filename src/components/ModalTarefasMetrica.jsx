@@ -280,12 +280,12 @@ export default function ModalTarefasMetrica({
       <div
         className="modal-content"
         style={{
-          width: '40vw',
-          height: '60vh',
-          minWidth: '420px',
-          minHeight: '440px',
+          width: '50vw',
+          height: '75vh',
+          minWidth: '525px',
+          minHeight: '550px',
           maxWidth: '95vw',
-          maxHeight: '90vh',
+          maxHeight: '92vh',
           background: '#111111',
           border: '1px solid rgba(199,199,199,0.22)',
           borderRadius: '14px',
