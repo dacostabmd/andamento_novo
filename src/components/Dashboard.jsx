@@ -284,6 +284,9 @@ export default function Dashboard({ regras, polos, poloLabels, corPolo, tarefas,
         totalValorCobranca,
         totalCobrancaAdimplente,
         totalCobrancaInadimplente,
+        totalRecebidoAsaas: totalCobrancaAdimplente,
+        totalAdimplente: totalCobrancaAdimplente,
+        totalInadimplente: totalCobrancaInadimplente,
         totalFaturamento,
         adimplentesCount,
         inadimplentesCount,
@@ -351,8 +354,8 @@ export default function Dashboard({ regras, polos, poloLabels, corPolo, tarefas,
     }
     if (onAbrirMetrica) {
       const sub = criterio === 'faturamento'
-        ? `Polo Regional com ${base.membros} membros vinculados • Faturamento: R$ ${base.totalFaturamento.toLocaleString('pt-BR')} • Adimplência: ${base.taxaAdimplencia.toFixed(1)}%`
-        : `Polo Regional com ${base.membros} membros vinculados (${base.total} tarefas)`;
+        ? `Polo Regional com ${base.membros} membros vinculados • Faturamento: R$ ${(base.totalFaturamento || 0).toLocaleString('pt-BR')} • Adimplência: ${(base.taxaAdimplencia || 0).toFixed(1)}%`
+        : `Polo Regional com ${base.membros} membros vinculados (${base.total || 0} tarefas)`;
       onAbrirMetrica({ titulo: `Tarefas – ${poloLabels[base.codigo] || base.codigo}`, subtitulo: sub, tarefas: base.tarefas, cor: corPolo[base.codigo] || '#5b9bdb', polo: base.codigo });
     } else if (onAbrirPolo) onAbrirPolo(base.codigo, base.tarefas);
   };
@@ -448,30 +451,30 @@ export default function Dashboard({ regras, polos, poloLabels, corPolo, tarefas,
                 <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(199,199,199,0.12)', borderRadius: '9px', padding: '12px 14px' }}>
                   <div style={s('font-size:11px;color:rgba(236,230,216,0.5);')}>Faturamento Total</div>
                   <div style={s('font-size:20px;font-weight:700;color:#f5dd90;margin-top:4px;')}>
-                    R$ {destaque.totalFaturamento.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                    R$ {(destaque.totalFaturamento || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                   </div>
                   <div style={s('font-size:10.5px;color:rgba(236,230,216,0.45);margin-top:2px;')}>Volume de cobrança e Asaas</div>
                 </div>
                 <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(199,199,199,0.12)', borderRadius: '9px', padding: '12px 14px' }}>
                   <div style={s('font-size:11px;color:rgba(236,230,216,0.5);')}>Taxa de Adimplência</div>
-                  <div style={{ fontSize: '20px', fontWeight: 700, color: destaque.taxaAdimplencia >= 75 ? '#5fc9a8' : '#f5dd90', marginTop: '4px' }}>
-                    {destaque.taxaAdimplencia.toFixed(1)}%
+                  <div style={{ fontSize: '20px', fontWeight: 700, color: (destaque.taxaAdimplencia || 0) >= 75 ? '#5fc9a8' : '#f5dd90', marginTop: '4px' }}>
+                    {(destaque.taxaAdimplencia || 0).toFixed(1)}%
                   </div>
                   <div style={s('font-size:10.5px;color:rgba(236,230,216,0.45);margin-top:2px;')}>
-                    {destaque.adimplentesCount} adimplentes / {destaque.inadimplentesCount} inadimplentes
+                    {destaque.adimplentesCount || 0} adimplentes / {destaque.inadimplentesCount || 0} inadimplentes
                   </div>
                 </div>
                 <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(199,199,199,0.12)', borderRadius: '9px', padding: '12px 14px' }}>
-                  <div style={s('font-size:11px;color:rgba(236,230,216,0.5);')}>Recebido (Asaas)</div>
+                  <div style={s('font-size:11px;color:rgba(236,230,216,0.5);')}>Recebido (Adimplente)</div>
                   <div style={s('font-size:20px;font-weight:700;color:#5fc9a8;margin-top:4px;')}>
-                    R$ {destaque.totalRecebidoAsaas.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                    R$ {(destaque.totalCobrancaAdimplente ?? destaque.totalRecebidoAsaas ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                   </div>
                   <div style={s('font-size:10.5px;color:rgba(236,230,216,0.45);margin-top:2px;')}>Total liquidado com sucesso</div>
                 </div>
                 <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(199,199,199,0.12)', borderRadius: '9px', padding: '12px 14px' }}>
                   <div style={s('font-size:11px;color:rgba(236,230,216,0.5);')}>Inadimplente (Asaas)</div>
                   <div style={s('font-size:20px;font-weight:700;color:#e0796f;margin-top:4px;')}>
-                    R$ {destaque.totalInadimplente.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                    R$ {(destaque.totalCobrancaInadimplente ?? destaque.totalInadimplente ?? 0).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                   </div>
                   <div style={s('font-size:10.5px;color:rgba(236,230,216,0.45);margin-top:2px;')}>Total vencido em cobrança</div>
                 </div>
@@ -480,23 +483,23 @@ export default function Dashboard({ regras, polos, poloLabels, corPolo, tarefas,
               <>
                 <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(199,199,199,0.12)', borderRadius: '9px', padding: '12px 14px' }}>
                   <div style={s('font-size:11px;color:rgba(236,230,216,0.5);')}>Volume de Tarefas</div>
-                  <div style={s('font-size:20px;font-weight:700;color:#5b9bdb;margin-top:4px;')}>{destaque.total.toLocaleString('pt-BR')}</div>
-                  <div style={s('font-size:10.5px;color:rgba(236,230,216,0.45);margin-top:2px;')}>{destaque.pctVolumeGeral.toFixed(1)}% do volume geral</div>
+                  <div style={s('font-size:20px;font-weight:700;color:#5b9bdb;margin-top:4px;')}>{(destaque.total || 0).toLocaleString('pt-BR')}</div>
+                  <div style={s('font-size:10.5px;color:rgba(236,230,216,0.45);margin-top:2px;')}>{(destaque.pctVolumeGeral || 0).toFixed(1)}% do volume geral</div>
                 </div>
                 <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(199,199,199,0.12)', borderRadius: '9px', padding: '12px 14px' }}>
                   <div style={s('font-size:11px;color:rgba(236,230,216,0.5);')}>Taxa de Atraso</div>
-                  <div style={s('font-size:20px;font-weight:700;color:#e0796f;margin-top:4px;')}>{destaque.taxaAtraso.toFixed(1)}%</div>
-                  <div style={s('font-size:10.5px;color:rgba(236,230,216,0.45);margin-top:2px;')}>{destaque.atrasadas} de {destaque.total} atrasadas</div>
+                  <div style={s('font-size:20px;font-weight:700;color:#e0796f;margin-top:4px;')}>{(destaque.taxaAtraso || 0).toFixed(1)}%</div>
+                  <div style={s('font-size:10.5px;color:rgba(236,230,216,0.45);margin-top:2px;')}>{destaque.atrasadas || 0} de {destaque.total || 0} atrasadas</div>
                 </div>
                 <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(199,199,199,0.12)', borderRadius: '9px', padding: '12px 14px' }}>
                   <div style={s('font-size:11px;color:rgba(236,230,216,0.5);')}>Concluídas / No Prazo</div>
-                  <div style={s('font-size:20px;font-weight:700;color:#5fc9a8;margin-top:4px;')}>{destaque.concluidas.toLocaleString('pt-BR')}</div>
-                  <div style={s('font-size:10.5px;color:rgba(236,230,216,0.45);margin-top:2px;')}>{destaque.rapidez.toFixed(1)}% de conformidade</div>
+                  <div style={s('font-size:20px;font-weight:700;color:#5fc9a8;margin-top:4px;')}>{(destaque.concluidas || 0).toLocaleString('pt-BR')}</div>
+                  <div style={s('font-size:10.5px;color:rgba(236,230,216,0.45);margin-top:2px;')}>{(destaque.rapidez || 0).toFixed(1)}% de conformidade</div>
                 </div>
                 <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(199,199,199,0.12)', borderRadius: '9px', padding: '12px 14px' }}>
                   <div style={s('font-size:11px;color:rgba(236,230,216,0.5);')}>Membros Vinculados</div>
-                  <div style={s('font-size:20px;font-weight:700;color:#f5dd90;margin-top:4px;')}>{destaque.membros}</div>
-                  <div style={s('font-size:10.5px;color:rgba(236,230,216,0.45);margin-top:2px;')}>{destaque.pontos} pontos acumulados</div>
+                  <div style={s('font-size:20px;font-weight:700;color:#f5dd90;margin-top:4px;')}>{destaque.membros || 0}</div>
+                  <div style={s('font-size:10.5px;color:rgba(236,230,216,0.45);margin-top:2px;')}>{destaque.pontos || 0} pontos acumulados</div>
                 </div>
               </>
             )}
@@ -619,10 +622,10 @@ export default function Dashboard({ regras, polos, poloLabels, corPolo, tarefas,
                     </div>
                     <div style={s('font-size:17px;font-weight:700;')}>
                       {criterio === 'faturamento'
-                        ? (base.totalFaturamento > 0
-                            ? `R$ ${base.totalFaturamento.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
+                        ? ((base.totalFaturamento || 0) > 0
+                            ? `R$ ${(base.totalFaturamento || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
                             : 'R$ 0')
-                        : base.total}
+                        : (base.total || 0)}
                     </div>
                   </div>
                   <div style={s('text-align:right;')}>
@@ -637,14 +640,14 @@ export default function Dashboard({ regras, polos, poloLabels, corPolo, tarefas,
                   <div style={{ marginTop: '10px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '9.5px', marginBottom: '4px' }}>
                       <span style={{ color: '#5fc9a8', fontWeight: 600 }}>
-                        ● Adimp: R$ {base.totalCobrancaAdimplente.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} ({base.adimplentesCount})
+                        ● Adimp: R$ {(base.totalCobrancaAdimplente || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} ({base.adimplentesCount || 0})
                       </span>
                       <span style={{ color: '#e0796f', fontWeight: 600 }}>
-                        ● Inad: R$ {base.totalCobrancaInadimplente.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} ({base.inadimplentesCount})
+                        ● Inad: R$ {(base.totalCobrancaInadimplente || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} ({base.inadimplentesCount || 0})
                       </span>
                     </div>
                     <div style={s('height:5px;background:rgba(224,121,111,0.3);border-radius:99px;overflow:hidden;display:flex;')}>
-                      <div style={{ height: '100%', background: '#5fc9a8', borderRadius: '99px', width: `${Math.max(0, Math.min(100, base.taxaAdimplencia))}%` }} />
+                      <div style={{ height: '100%', background: '#5fc9a8', borderRadius: '99px', width: `${Math.max(0, Math.min(100, base.taxaAdimplencia || 0))}%` }} />
                     </div>
                   </div>
                 ) : (
@@ -868,22 +871,22 @@ export default function Dashboard({ regras, polos, poloLabels, corPolo, tarefas,
                       {p.membros}
                     </td>
                     <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 600, color: '#5fc9a8' }}>
-                      {p.concluidas.toLocaleString('pt-BR')}
+                      {(p.concluidas || 0).toLocaleString('pt-BR')}
                     </td>
                     <td style={{ padding: '12px 16px', textAlign: 'right', color: '#5b9bdb' }}>
-                      {p.noPrazo.toLocaleString('pt-BR')}
+                      {(p.noPrazo || 0).toLocaleString('pt-BR')}
                     </td>
                     <td style={{ padding: '12px 16px', textAlign: 'right', color: '#e0796f' }}>
-                      {p.atrasadas.toLocaleString('pt-BR')}
+                      {(p.atrasadas || 0).toLocaleString('pt-BR')}
                     </td>
                     <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 600 }}>
-                      {p.total.toLocaleString('pt-BR')}
+                      {(p.total || 0).toLocaleString('pt-BR')}
                     </td>
                     <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 600, color: '#f5dd90', fontVariantNumeric: 'tabular-nums' }}>
-                      R$ {p.totalFaturamento.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                      R$ {(p.totalFaturamento || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                     </td>
-                    <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 600, color: p.taxaAdimplencia >= 75 ? '#5fc9a8' : (p.taxaAdimplencia >= 50 ? '#f5dd90' : '#e0796f'), fontVariantNumeric: 'tabular-nums' }}>
-                      {p.taxaAdimplencia.toFixed(1)}%
+                    <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 600, color: (p.taxaAdimplencia || 0) >= 75 ? '#5fc9a8' : ((p.taxaAdimplencia || 0) >= 50 ? '#f5dd90' : '#e0796f'), fontVariantNumeric: 'tabular-nums' }}>
+                      {(p.taxaAdimplencia || 0).toFixed(1)}%
                     </td>
                     <td style={{ padding: '12px 16px', textAlign: 'right' }}>
                       <span
@@ -897,7 +900,7 @@ export default function Dashboard({ regras, polos, poloLabels, corPolo, tarefas,
                           fontSize: '12px',
                         }}
                       >
-                        {p.pontos.toLocaleString('pt-BR')} pts
+                        {(p.pontos || 0).toLocaleString('pt-BR')} pts
                       </span>
                     </td>
                     <td style={{ padding: '12px 16px', textAlign: 'right' }}>
