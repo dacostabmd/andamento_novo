@@ -114,26 +114,7 @@ function InfograficoProjecao({ dadosMM, isHovered }) {
         <span style={{ color: '#f5dd90' }}>● 15d: {val15.toFixed(0)}%</span>
         <span style={{ color: '#c068f0' }}>● 30d: {val30.toFixed(0)}%</span>
       </div>
-      {modalProjecaoPolo && (
-        <ModalProjecaoAtendimento
-          polo={modalProjecaoPolo}
-          poloLabels={poloLabels}
-          corPolo={corPolo}
-          onFechar={() => setModalProjecaoPolo(null)}
-          onVerTarefas={(p) => {
-            if (onAbrirMetrica) {
-              onAbrirMetrica({
-                titulo: `Tarefas – ${poloLabels[p.codigo] || p.codigo}`,
-                subtitulo: `Polo Regional com ${p.membros} membros vinculados (${p.total} tarefas)`,
-                tarefas: p.tarefas,
-                cor: corPolo[p.codigo] || '#5b9bdb',
-                polo: p.codigo,
-                criterio,
-              });
-            }
-          }}
-        />
-      )}
+
     </div>
   );
 }
@@ -954,6 +935,27 @@ export default function Dashboard({ regras, polos, poloLabels, corPolo, tarefas,
           </table>
         </div>
       </div>
+
+      {modalProjecaoPolo && (
+        <ModalProjecaoAtendimento
+          polo={modalProjecaoPolo}
+          poloLabels={poloLabels}
+          corPolo={corPolo}
+          onFechar={() => setModalProjecaoPolo(null)}
+          onVerTarefas={(p) => {
+            if (onAbrirMetrica) {
+              onAbrirMetrica({
+                titulo: `Tarefas – ${poloLabels[p.codigo] || p.codigo}`,
+                subtitulo: `Polo Regional com ${p.membros} membros vinculados (${p.total} tarefas)`,
+                tarefas: p.tarefas,
+                cor: corPolo[p.codigo] || '#5b9bdb',
+                polo: p.codigo,
+                criterio,
+              });
+            }
+          }}
+        />
+      )}
     </div>
   );
 }
