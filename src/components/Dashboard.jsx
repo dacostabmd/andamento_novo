@@ -391,10 +391,19 @@ export default function Dashboard({ regras, polos, poloLabels, corPolo, tarefas,
                 const cor = corPolo[p.codigo] || '#5b9bdb';
                 const taxaResolucao = p.total > 0 ? ((p.concluidas / p.total) * 100).toFixed(1) : '0.0';
 
-                let medalha = `${index + 1}º`;
-                if (index === 0) medalha = '🥇 1º';
-                else if (index === 1) medalha = '🥈 2º';
-                else if (index === 2) medalha = '🥉 3º';
+                let posicaoTexto = `${index + 1}º`;
+                let corPosicao = 'rgba(236,230,216,0.6)';
+
+                if (index === 0) {
+                  posicaoTexto = '★ 1º';
+                  corPosicao = '#f5dd90';
+                } else if (index === 1) {
+                  posicaoTexto = '★ 2º';
+                  corPosicao = '#d8d8d8';
+                } else if (index === 2) {
+                  posicaoTexto = '★ 3º';
+                  corPosicao = '#cd7f32';
+                }
 
                 return (
                   <tr
@@ -408,8 +417,8 @@ export default function Dashboard({ regras, polos, poloLabels, corPolo, tarefas,
                     onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.03)')}
                     onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
                   >
-                    <td style={{ padding: '12px 16px', textAlign: 'center', fontWeight: 700, color: index < 3 ? '#f5dd90' : 'rgba(236,230,216,0.6)' }}>
-                      {medalha}
+                    <td style={{ padding: '12px 16px', textAlign: 'center', fontWeight: 700, color: corPosicao, fontVariantNumeric: 'tabular-nums' }}>
+                      {posicaoTexto}
                     </td>
                     <td style={{ padding: '12px 16px' }}>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
