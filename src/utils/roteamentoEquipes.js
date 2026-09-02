@@ -53,12 +53,41 @@ export const UF_PARA_POLO = {
 };
 
 /**
- * Extrai a sigla da UF (estado) a partir dos dados da tarefa.
+ * Mapeamento dos 27 departamentos de estado do Bitrix24 (IDs 1431 a 1457)
+ * para a respectiva sigla de UF.
+ */
+export const DEPT_PARA_UF = {
+  1431: 'AC', 1432: 'AL', 1433: 'AP', 1434: 'AM', 1435: 'BA',
+  1436: 'CE', 1437: 'DF', 1438: 'ES', 1439: 'GO', 1440: 'MA',
+  1441: 'MT', 1442: 'MS', 1443: 'MG', 1444: 'PA', 1445: 'PB',
+  1446: 'PR', 1447: 'PE', 1448: 'PI', 1449: 'RJ', 1450: 'RN',
+  1451: 'RS', 1452: 'RO', 1453: 'RR', 1454: 'SC', 1455: 'SP',
+  1456: 'SE', 1457: 'TO',
+};
+
+/**
+ * Mapeamento de nomes de estados por extenso para siglas de UF.
+ */
+export const NOMES_ESTADOS_PARA_UF = {
+  acre: 'AC', alagoas: 'AL', amapa: 'AP', 'amapá': 'AP', amazonas: 'AM',
+  bahia: 'BA', ceara: 'CE', 'ceará': 'CE', 'distrito federal': 'DF',
+  'espirito santo': 'ES', 'espírito santo': 'ES', goias: 'GO', 'goiás': 'GO',
+  maranhao: 'MA', 'maranhão': 'MA', 'mato grosso': 'MT', 'mato grosso do sul': 'MS',
+  'minas gerais': 'MG', para: 'PA', 'pará': 'PA', paraiba: 'PB', 'paraíba': 'PB',
+  parana: 'PR', 'paraná': 'PR', pernambuco: 'PE', piaui: 'PI', 'piauí': 'PI',
+  'rio de janeiro': 'RJ', 'rio grande do norte': 'RN', 'rio grande do sul': 'RS',
+  rondonia: 'RO', 'rondônia': 'RO', roraima: 'RR', 'santa catarina': 'SC',
+  'sao paulo': 'SP', 'são paulo': 'SP', sergipe: 'SE', tocantins: 'TO',
+};
+
+/**
+ * Extrai a sigla da UF (estado) onde o card se situa a partir de todos os metadados.
  */
 export function extrairEstadoUf(tarefa) {
   if (!tarefa) return null;
 
-  const campos = [
+  // 1. Campos diretos de UF no card
+  const camposDiretos = [
     tarefa.estadoUf,
     tarefa.uf,
     tarefa.clienteEstado,
@@ -66,23 +95,79 @@ export function extrairEstadoUf(tarefa) {
     tarefa.ufCliente,
   ];
 
-  for (const c of campos) {
+  for (const c of camposDiretos) {
     if (typeof c === 'string' && c.trim().length >= 2) {
       const match = c.trim().match(/\b([A-Za-z]{2})\b/);
       if (match && UF_PARA_POLO[match[1].toUpperCase()]) {
         return match[1].toUpperCase();
       }
+      const nomeLimpo = c.trim().toLowerCase();
+      if (NOMES_ESTADOS_PARA_UF[nomeLimpo]) {
+        return NOMES_ESTADOS_PARA_UF[nomeLimpo];
+      }
     }
   }
 
-  // Tenta extrair do título ou nome do cliente (ex.: "Carlos Eduardo (SP)" ou "Cobrança - BA")
-  const texto = `${tarefa.titulo || ''} ${tarefa.clienteNome || ''}`;
+  // 2. Departamentos de estado associados ao fechador ou responsável (IDs 1431 a 1457)
+  const depts = [
+    ...(Array.isArray(tarefa.fechadoPorDepartamentos) ? tarefa.fechadoPorDepartamentos : []),
+    ...(Array.isArray(tarefa.responsavelDepartamentos) ? tarefa.responsavelDepartamentos : []),
+  ];
+  for (const did of depts) {
+    const num = Number(did);
+    if (DEPT_PARA_UF[num]) {
+      return DEPT_PARA_UF[num];
+    }
+  }
+
+  // 3. Nome do grupo/projeto da tarefa (ex.: "Andamento RJ", "Cobrança SP", etc.)
+  if (typeof tarefa.projetoNome === 'string') {
+    const matchProj = tarefa.projetoNome.match(/\b(AC|AL|AP|AM|BA|CE|DF|ES|GO|MA|MT|MS|MG|PA|PB|PR|PE|PI|RJ|RN|RS|RO|RR|SC|SP|SE|TO)\b/i);
+    if (matchProj && UF_PARA_POLO[matchProj[1].toUpperCase()]) {
+      return matchProj[1].toUpperCase();
+    }
+  }
+
+  // 4. Texto livre do título ou nome do cliente (ex.: "Carlos Eduardo (SP)" ou "Cobrança - BA")
+  const texto = `${tarefa.titulo || ''} ${tarefa.clienteNome || ''} ${tarefa.projetoNome || ''}`;
   const matchTexto = texto.match(/\b(AC|AL|AP|AM|BA|CE|DF|ES|GO|MA|MT|MS|MG|PA|PB|PR|PE|PI|RJ|RN|RS|RO|RR|SC|SP|SE|TO)\b/i);
   if (matchTexto && UF_PARA_POLO[matchTexto[1].toUpperCase()]) {
     return matchTexto[1].toUpperCase();
   }
 
+  // 5. Nomes de estados por extenso no texto
+  const textoMin = texto.toLowerCase();
+  for (const [nomeExtenso, uf] of Object.entries(NOMES_ESTADOS_PARA_UF)) {
+    if (textoMin.includes(nomeExtenso)) {
+      return uf;
+    }
+  }
+
   return null;
+}
+
+/**
+ * Determina se a tarefa está no escalão de 48 horas:
+ * - Marcada explicitamente como escalão 48h; OU
+ * - Criada/sem atividade há mais de 48h e ainda não finalizada.
+ */
+export function ehTarefaEscalao48h(tarefa) {
+  if (!tarefa) return false;
+  if (Boolean(tarefa.emEscalao48h || tarefa.ehEscalao48h)) return true;
+
+  // Se a tarefa não estiver concluída, calcula o tempo decorrido desde a criação ou última atividade
+  if (tarefa.situacaoPrazo !== 'concluida') {
+    const dataRef = tarefa.atualizadoEm || tarefa.primeiraAtividadeEm || tarefa.criadoEm;
+    if (dataRef) {
+      const data = new Date(dataRef).getTime();
+      if (!Number.isNaN(data) && data > 0) {
+        const horas = (Date.now() - data) / (1000 * 60 * 60);
+        if (horas >= 48) return true;
+      }
+    }
+  }
+
+  return false;
 }
 
 /**
@@ -191,8 +276,10 @@ export function normalizarTarefa(t, indice) {
 
   // 1. Resolve o polo
   let polo = t.poloCobranca;
+  const uf = extrairEstadoUf(t);
+
+  // Caso o polo não tenha nenhum vínculo, adiciona o vínculo do estado onde o card se situa
   if (!polo || polo === 'Sem vínculo') {
-    const uf = extrairEstadoUf(t);
     if (uf && UF_PARA_POLO[uf]) {
       polo = UF_PARA_POLO[uf];
     } else {
@@ -212,15 +299,17 @@ export function normalizarTarefa(t, indice) {
         polo = indice.poloPorCobrador.get(cob);
       } else if (adv && indice.poloPorAdvogado.has(adv)) {
         polo = indice.poloPorAdvogado.get(adv);
+      } else if (uf) {
+        polo = uf;
       }
     }
   } else if (UF_PARA_POLO[polo]) {
     polo = UF_PARA_POLO[polo];
   }
 
-  // 2. Resolve o dígito final do CPF
+  // 2. Resolve o dígito final do CPF e o Escalão 48 Horas
   const digito = extrairDigitoFinalCpf(t);
-  const eh48h = Boolean(t.emEscalao48h || t.ehEscalao48h);
+  const eh48h = ehTarefaEscalao48h(t);
 
   // 3. Resolve Cobrador e Advogado conforme o Anexo 2
   let cobrador = t.equipeCobrancaColaboradorNome;
@@ -252,7 +341,10 @@ export function normalizarTarefa(t, indice) {
     ...t,
     clienteNome: nomeLimpo,
     titulo: tituloLimpo,
-    poloCobranca: polo || null,
+    poloCobranca: polo || (uf ? UF_PARA_POLO[uf] || uf : null),
+    estadoUf: uf || t.estadoUf || null,
+    emEscalao48h: eh48h,
+    ehEscalao48h: eh48h,
     digitoCpfCliente: digito !== null ? digito : t.digitoCpfCliente,
     equipeCobrancaColaboradorNome: cobrador || '—',
     equipeCobrancaAdvogado: advogado || 'Sem advogado',

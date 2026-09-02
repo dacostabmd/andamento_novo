@@ -54,9 +54,10 @@ export default function Tarefas({
 
   const filtradas = useMemo(() => {
     return tarefas.filter((t) => {
+      const eh48h = Boolean(t.emEscalao48h || t.ehEscalao48h);
       if (filtros.advogado !== 'todos' && t.equipeCobrancaAdvogado !== filtros.advogado) return false;
-      if (filtros.escalao48h === 'ate_48h' && t.emEscalao48h) return false;
-      if (filtros.escalao48h === 'mais_48h' && !t.emEscalao48h) return false;
+      if (filtros.escalao48h === 'ate_48h' && eh48h) return false;
+      if (filtros.escalao48h === 'mais_48h' && !eh48h) return false;
       if (filtros.digitoCpf !== 'todos' && String(t.digitoCpfCliente) !== filtros.digitoCpf) return false;
       if (filtros.apenasConcluidas && t.situacaoPrazo !== 'concluida') return false;
       if (filtros.buscaTexto.trim()) {
@@ -82,10 +83,10 @@ export default function Tarefas({
         case 'cliente':
           vA = (a.clienteNome || a.titulo || '').toLowerCase();
           vB = (b.clienteNome || b.titulo || '').toLowerCase();
-          return direcaoOrdem === 'asc' ? vA.localeCompare(vB) : vB.localeCompare(vA);
+          return direcaoOrdem === 'asc' ? vA.localeCompare(vB) : vB.localeCompare(a);
         case 'polo':
-          vA = (poloLabels[a.poloCobranca] || a.poloCobranca || '').toLowerCase();
-          vB = (poloLabels[b.poloCobranca] || b.poloCobranca || '').toLowerCase();
+          vA = (poloLabels[a.poloCobranca] || a.poloCobranca || a.estadoUf || '').toLowerCase();
+          vB = (poloLabels[b.poloCobranca] || b.poloCobranca || b.estadoUf || '').toLowerCase();
           return direcaoOrdem === 'asc' ? vA.localeCompare(vB) : vB.localeCompare(vA);
         case 'cobrador':
           vA = (a.equipeCobrancaColaboradorNome || '').toLowerCase();
@@ -95,10 +96,13 @@ export default function Tarefas({
           vA = (a.equipeCobrancaAdvogado || '').toLowerCase();
           vB = (b.equipeCobrancaAdvogado || '').toLowerCase();
           return direcaoOrdem === 'asc' ? vA.localeCompare(vB) : vB.localeCompare(vA);
-        case 'criterio':
-          vA = a.emEscalao48h ? 99 : (a.digitoCpfCliente ?? -1);
-          vB = b.emEscalao48h ? 99 : (b.digitoCpfCliente ?? -1);
+        case 'criterio': {
+          const eh48hA = Boolean(a.emEscalao48h || a.ehEscalao48h);
+          const eh48hB = Boolean(b.emEscalao48h || b.ehEscalao48h);
+          vA = eh48hA ? 99 : (a.digitoCpfCliente ?? -1);
+          vB = eh48hB ? 99 : (b.digitoCpfCliente ?? -1);
           return direcaoOrdem === 'asc' ? vA - vB : vB - vA;
+        }
         case 'status': {
           const pesos = { atrasada: 3, no_prazo: 2, concluida: 1 };
           vA = pesos[a.situacaoPrazo] || 0;
@@ -267,13 +271,21 @@ export default function Tarefas({
                           whiteSpace: 'nowrap',
                         }}
                       >
-                        {t.poloCobranca ? poloLabels[t.poloCobranca] : 'Sem vínculo'}
+                        {t.poloCobranca
+                          ? (poloLabels[t.poloCobranca] || t.poloCobranca)
+                          : (t.estadoUf ? (poloLabels[t.estadoUf] || `Polo ${t.estadoUf}`) : 'Sem vínculo')}
                       </span>
                     </td>
                     <td style={s('padding:10px 16px;font-weight:600;')}>{t.equipeCobrancaColaboradorNome || '—'}</td>
                     <td style={s('padding:10px 16px;color:rgba(236,230,216,0.85);')}>{t.equipeCobrancaAdvogado || 'Sem advogado'}</td>
                     <td style={s('padding:10px 16px;font-size:11.5px;color:rgba(236,230,216,0.55);')}>
-                      {t.emEscalao48h ? '48 HORAS' : t.digitoCpfCliente != null ? 'CPF final ' + t.digitoCpfCliente : '—'}
+                      {Boolean(t.emEscalao48h || t.ehEscalao48h) ? (
+                        <span style={{ color: '#f5dd90', fontWeight: 700 }}>48 HORAS</span>
+                      ) : t.digitoCpfCliente != null ? (
+                        'CPF final ' + t.digitoCpfCliente
+                      ) : (
+                        '—'
+                      )}
                     </td>
                     <td style={s('padding:10px 16px;')}>
                       <span
