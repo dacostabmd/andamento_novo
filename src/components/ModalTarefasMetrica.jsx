@@ -37,6 +37,36 @@ export default function ModalTarefasMetrica({
   const [ordemColuna, setOrdemColuna] = useState('cliente');
   const [ordemDirecao, setOrdemDirecao] = useState('asc'); // 'asc' | 'desc'
 
+  // Verifica dimensões que realmente variam entre as tarefas deste modal para não exibir ordenações redundantes
+  const polosDistintos = useMemo(
+    () => new Set(tarefas.map((t) => t.poloCobranca).filter(Boolean)),
+    [tarefas]
+  );
+  const statusDistintos = useMemo(
+    () => new Set(tarefas.map((t) => t.situacaoPrazo).filter(Boolean)),
+    [tarefas]
+  );
+  const temMultiplosPolos = polosDistintos.size > 1;
+
+  const colunasOrdenacaoDisponiveis = useMemo(() => {
+    return COLUNAS_ORDENACAO.filter((col) => {
+      // Se todas as tarefas são do mesmo polo/estado, ordenar por polo é redundante
+      if (col.key === 'polo' && !temMultiplosPolos) return false;
+      // Se todas as tarefas têm o mesmo status (ex: modal de atrasadas), ordenar por status é redundante
+      if (col.key === 'status' && statusDistintos.size <= 1) return false;
+      return true;
+    });
+  }, [temMultiplosPolos, statusDistintos]);
+
+  useEffect(() => {
+    if (ordemColuna === 'polo' && !temMultiplosPolos) {
+      setOrdemColuna('cliente');
+    }
+    if (ordemColuna === 'status' && statusDistintos.size <= 1) {
+      setOrdemColuna('cliente');
+    }
+  }, [ordemColuna, temMultiplosPolos, statusDistintos]);
+
   // Fecha modal ao apertar a tecla ESC (fase de captura para interceptar mesmo com foco em input)
   useEffect(() => {
     const handleKeyDown = (e) => {
@@ -347,7 +377,7 @@ export default function ModalTarefasMetrica({
           <span style={{ fontSize: '11px', color: 'rgba(236,230,216,0.45)', fontWeight: 600, flexShrink: 0, marginRight: '2px' }}>
             Ordenar:
           </span>
-          {COLUNAS_ORDENACAO.map((col) => {
+          {colunasOrdenacaoDisponiveis.map((col) => {
             const ativa = ordemColuna === col.key;
             return (
               <button
@@ -504,7 +534,8 @@ export default function ModalTarefasMetrica({
                             flexWrap: 'wrap',
                           }}
                         >
-                          {t.poloCobranca && (
+                          {/* Só exibe badge do polo se houver múltiplos polos distintos no modal */}
+                          {temMultiplosPolos && t.poloCobranca && (
                             <span
                               style={{
                                 backgroundColor: (corPoloAtual || '#718096') + '20',

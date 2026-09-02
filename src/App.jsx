@@ -22,7 +22,7 @@ import {
   salvarPermissao,
   excluirPermissao,
 } from './services/equipeCobrancaApi.js';
-import { obterUsuarioAtual } from './services/bitrixSdk.js';
+import { obterUsuarioAtual, aguardarBX24 } from './services/bitrixSdk.js';
 import { montarLinkTarefaBitrix, montarCaminhoTarefaBitrix } from './services/bitrixLink.js';
 import {
   MOCK_POLOS,
@@ -180,7 +180,7 @@ export default function App() {
     toastTimer.current = setTimeout(() => setToastMsg(''), 2800);
   }
 
-  function abrirTarefaNoBitrix(tarefa) {
+  async function abrirTarefaNoBitrix(tarefa) {
     const link = montarLinkTarefaBitrix(tarefa);
     if (!link) {
       mostrarToast('Esta tarefa não tem link do Bitrix disponível.');
@@ -189,8 +189,22 @@ export default function App() {
 
     const caminho = montarCaminhoTarefaBitrix(tarefa);
 
-    // 1. Se estiver dentro do Bitrix24 e o SidePanel (gaveta lateral) estiver disponível,
-    // abre a tarefa diretamente no slider sobre a página atual (mesma aba):
+    // 1. Abre no POP-UP nativo do Bitrix24 (SidePanel Slider) através do SDK (BX24.openPath):
+    // Isso mantém o aplicativo aberto por baixo; ao fechar a tarefa (botão X do pop-up),
+    // o pop-up fecha e o usuário permanece dentro do aplicativo normalmente!
+    let bx = null;
+    if (typeof window.BX24 !== 'undefined' && window.BX24) {
+      bx = window.BX24;
+    } else {
+      bx = await aguardarBX24(1000);
+    }
+
+    if (bx && typeof bx.openPath === 'function' && caminho) {
+      bx.openPath(caminho);
+      return;
+    }
+
+    // 2. Tenta abrir via SidePanel no window.top caso acessível (mesmo domínio):
     try {
       if (window.top && window.top.BX && window.top.BX.SidePanel && window.top.BX.SidePanel.Instance) {
         window.top.BX.SidePanel.Instance.open(caminho || link);
@@ -209,22 +223,9 @@ export default function App() {
       // Ignora erro
     }
 
-    // 2. Navega a janela principal (top) na MESMA aba do navegador (sem abrir nova aba):
-    try {
-      if (window.top && window.top !== window) {
-        window.top.location.href = link;
-        return;
-      }
-    } catch {
-      // Se política de sandbox bloquear
-    }
-
-    // 3. Fallback para navegação na mesma aba:
-    try {
-      window.location.assign(link);
-    } catch {
-      window.location.href = link;
-    }
+    // 3. Fora do Bitrix (ex.: desenvolvimento local):
+    // Abre em nova aba para que o usuário não descarregue a aplicação local
+    window.open(link, '_blank');
   }
 
   function abrirNovo() {

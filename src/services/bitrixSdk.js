@@ -12,7 +12,7 @@
  */
 
 /** Espera o BX24 aparecer (o loader é assíncrono). Resolve null se não vier. */
-function aguardarBX24(timeoutMs = 5000) {
+export function aguardarBX24(timeoutMs = 5000) {
   return new Promise((resolve) => {
     if (typeof window.BX24 !== 'undefined' && window.BX24) return resolve(window.BX24)
     const inicio = Date.now()
