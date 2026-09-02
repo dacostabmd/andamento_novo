@@ -1,3 +1,4 @@
+import ModalProjecaoAtendimento from './ModalProjecaoAtendimento.jsx';
 import { useState, useMemo } from 'react';
 import { s } from '../style.js';
 import { IconTrophy } from './Icons.jsx';
@@ -113,6 +114,26 @@ function InfograficoProjecao({ dadosMM, isHovered }) {
         <span style={{ color: '#f5dd90' }}>● 15d: {val15.toFixed(0)}%</span>
         <span style={{ color: '#c068f0' }}>● 30d: {val30.toFixed(0)}%</span>
       </div>
+      {modalProjecaoPolo && (
+        <ModalProjecaoAtendimento
+          polo={modalProjecaoPolo}
+          poloLabels={poloLabels}
+          corPolo={corPolo}
+          onFechar={() => setModalProjecaoPolo(null)}
+          onVerTarefas={(p) => {
+            if (onAbrirMetrica) {
+              onAbrirMetrica({
+                titulo: `Tarefas – ${poloLabels[p.codigo] || p.codigo}`,
+                subtitulo: `Polo Regional com ${p.membros} membros vinculados (${p.total} tarefas)`,
+                tarefas: p.tarefas,
+                cor: corPolo[p.codigo] || '#5b9bdb',
+                polo: p.codigo,
+                criterio,
+              });
+            }
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -122,6 +143,7 @@ export default function Dashboard({ regras, polos, poloLabels, corPolo, tarefas,
   const [tabelaOrdemColuna, setTabelaOrdemColuna] = useState('pontos');
   const [tabelaOrdemDir, setTabelaOrdemDir] = useState('desc');
   const [hoveredPolo, setHoveredPolo] = useState(null);
+  const [modalProjecaoPolo, setModalProjecaoPolo] = useState(null);
 
   const handleMudarCriterio = (novoCriterio) => {
     setCriterio(novoCriterio);
@@ -346,6 +368,10 @@ export default function Dashboard({ regras, polos, poloLabels, corPolo, tarefas,
   };
 
   const handleClickPolo = (base) => {
+    if (criterio === 'projecao_atendimento') {
+      setModalProjecaoPolo(base);
+      return;
+    }
     if (onAbrirMetrica) {
       const sub = criterio === 'faturamento'
         ? `Polo Regional com ${base.membros} membros vinculados • Faturamento: R$ ${base.totalFaturamento.toLocaleString('pt-BR')} • Adimplência: ${base.taxaAdimplencia.toFixed(1)}%`
@@ -570,20 +596,20 @@ export default function Dashboard({ regras, polos, poloLabels, corPolo, tarefas,
             borderRadius: '12px',
             padding: '16px',
             cursor: 'pointer',
-            transition: 'transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.22s ease, border-color 0.2s ease',
+            transition: 'transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.35s ease, border-color 0.25s ease',
             display: 'flex',
             flexDirection: 'column',
             justifyContent: 'space-between',
-            minHeight: isProjecao ? (isHovered ? '205px' : '172px') : '144px',
+            minHeight: isProjecao ? '184px' : '144px',
             position: 'relative',
-            zIndex: isHovered ? 40 : 1,
+            zIndex: isHovered ? 30 : 1,
             transform: isHovered
-              ? (isProjecao ? 'translateY(-8px) scale(1.06)' : 'translateY(-4px) scale(1.02)')
+              ? (isProjecao ? 'translateY(-4px) scale(1.025)' : 'translateY(-3px) scale(1.015)')
               : 'none',
             boxShadow: isHovered
               ? (isProjecao
-                  ? '0 20px 42px rgba(0,0,0,0.85), 0 0 0 1px rgba(245,221,144,0.45)'
-                  : '0 12px 28px rgba(0,0,0,0.6)')
+                  ? '0 14px 32px rgba(0,0,0,0.75), 0 0 0 1px rgba(245,221,144,0.35)'
+                  : '0 10px 24px rgba(0,0,0,0.5)')
               : 'none',
           };
 
@@ -594,7 +620,7 @@ export default function Dashboard({ regras, polos, poloLabels, corPolo, tarefas,
               onClick={() => handleClickPolo(base)}
               onMouseEnter={() => setHoveredPolo(base.codigo)}
               onMouseLeave={() => setHoveredPolo(null)}
-              title={`Clique para detalhar tarefas de ${poloLabels[base.codigo] || base.codigo}`}
+              title={isProjecao ? `Clique para abrir o gráfico detalhado de projeção (${poloLabels[base.codigo] || base.codigo})` : `Clique para detalhar tarefas de ${poloLabels[base.codigo] || base.codigo}`}
               style={cardStyle}
             >
               <div style={{ marginBottom: '10px' }}>

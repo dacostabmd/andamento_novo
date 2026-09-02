@@ -109,6 +109,69 @@ export default function ModalTarefasMetrica({
   );
   const temMultiplosPolos = polosDistintos.size > 1;
 
+  // Aba ativa de visualização do ranking de faturamento
+  const [abaRanking, setAbaRanking] = useState('times'); // 'times' | 'cobradores' | 'advogados'
+
+  // Ranking de Times (Cobrador ↔ Advogado relacionados a números de CPF) que mais faturaram
+  const timesFaturamento = useMemo(() => {
+    if (criterio !== 'faturamento' || !equipesDoPolo || equipesDoPolo.length === 0) return [];
+
+    return equipesDoPolo.map((eq) => {
+      const r = eq.regra;
+      const tarefasDoTime = tarefas.filter((t) => {
+        if (r.ehEscalao48h) return Boolean(t.emEscalao48h || t.ehEscalao48h);
+        if (Array.isArray(r.digitosCpf) && r.digitosCpf.length > 0) {
+          if (t.digitoCpfCliente != null && r.digitosCpf.includes(Number(t.digitoCpfCliente))) {
+            return true;
+          }
+        }
+        const cobT = (t.equipeCobrancaColaboradorNome || t.colaboradorNome || '').toLowerCase().trim();
+        const cobR = (r.colaboradorNome || '').toLowerCase().trim();
+        return Boolean(cobR && cobT && (cobT.includes(cobR) || cobR.includes(cobT)));
+      });
+
+      let totalFaturamento = 0;
+      let totalRecebido = 0;
+      let totalInadimplente = 0;
+      let adimplentesCount = 0;
+      let inadimplentesCount = 0;
+
+      for (const t of tarefasDoTime) {
+        const valor = (typeof t.valorCobranca === 'number' && !isNaN(t.valorCobranca) && t.valorCobranca > 0)
+          ? t.valorCobranca
+          : ((typeof t.valorRecebidoAsaas === 'number' ? t.valorRecebidoAsaas : 0) + (typeof t.valorInadimplente === 'number' ? t.valorInadimplente : 0));
+
+        totalFaturamento += valor;
+        if (typeof t.valorRecebidoAsaas === 'number' && !isNaN(t.valorRecebidoAsaas)) totalRecebido += t.valorRecebidoAsaas;
+        if (typeof t.valorInadimplente === 'number' && !isNaN(t.valorInadimplente)) totalInadimplente += t.valorInadimplente;
+        const sit = (t.situacaoFinanceira || '').toUpperCase();
+        if (sit === 'ADIMPLENTE') adimplentesCount++;
+        else if (sit === 'INADIMPLENTE') inadimplentesCount++;
+      }
+
+      const somaAsaas = totalRecebido + totalInadimplente;
+      const taxaAdimplencia = somaAsaas > 0
+        ? (totalRecebido / somaAsaas) * 100
+        : ((adimplentesCount + inadimplentesCount) > 0 ? (adimplentesCount / (adimplentesCount + inadimplentesCount)) * 100 : 100);
+
+      return {
+        id: eq.id,
+        label: eq.label,
+        regra: r,
+        cobrador: r.colaboradorNome || 'Cobrador não definido',
+        advogado: r.advogado || 'Sem advogado',
+        cpfTexto: r.ehEscalao48h ? 'Escalão 48 Horas' : (Array.isArray(r.digitosCpf) && r.digitosCpf.length > 0 ? `CPF final ${r.digitosCpf.join(', ')}` : 'Sem CPF'),
+        totalFaturamento,
+        totalRecebido,
+        totalInadimplente,
+        adimplentesCount,
+        inadimplentesCount,
+        taxaAdimplencia,
+        qtdTarefas: tarefasDoTime.length,
+      };
+    }).sort((a, b) => (b.totalFaturamento - a.totalFaturamento) || (b.totalRecebido - a.totalRecebido) || (b.qtdTarefas - a.qtdTarefas));
+  }, [criterio, equipesDoPolo, tarefas]);
+
   // Quando em modo Faturamento, calcula o ranking dos colaboradores (cobradores e advogados) que mais faturaram
   const rankingFinanceiro = useMemo(() => {
     if (criterio !== 'faturamento') return null;
@@ -477,32 +540,99 @@ export default function ModalTarefasMetrica({
           </button>
         </div>
 
-{/* ─── RANKING DE FATURAMENTO POR COLABORADOR (MODO FATURAMENTO) ─── */}
-        {criterio === 'faturamento' && rankingFinanceiro && (
+{/* ─── RANKING DE FATURAMENTO POR TIMES E COLABORADORES (MODO FATURAMENTO) ─── */}
+        {criterio === 'faturamento' && (timesFaturamento.length > 0 || rankingFinanceiro) && (
           <div style={{ padding: '0 20px 10px 20px', flexShrink: 0 }}>
             <div
               style={{
-                background: 'linear-gradient(135deg, rgba(245,221,144,0.06) 0%, rgba(20,20,20,0.85) 100%)',
-                border: '1px solid rgba(245,221,144,0.22)',
+                background: 'linear-gradient(135deg, rgba(245,221,144,0.06) 0%, rgba(20,20,20,0.88) 100%)',
+                border: '1px solid rgba(245,221,144,0.24)',
                 borderRadius: '12px',
                 padding: '12px 14px',
                 marginBottom: '8px',
               }}
             >
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+              {/* Header do Ranking com Seletor de Abas */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px', flexWrap: 'wrap', gap: '8px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span style={{ fontSize: '15px' }}>💰</span>
-                  <span style={{ fontSize: '13px', fontWeight: 800, color: '#f5dd90', letterSpacing: '-0.01em' }}>
-                    Colaboradores que Mais Faturaram
-                  </span>
-                  <span style={{ fontSize: '11px', color: 'rgba(236,230,216,0.45)' }}>
-                    (Cobrança Bitrix & Asaas)
-                  </span>
+                  <span style={{ fontSize: '16px' }}>🏆</span>
+                  <div>
+                    <span style={{ fontSize: '13px', fontWeight: 800, color: '#f5dd90', letterSpacing: '-0.01em' }}>
+                      Ranking de Faturamento deste Polo
+                    </span>
+                    <span style={{ fontSize: '11px', color: 'rgba(236,230,216,0.45)', marginLeft: '6px' }}>
+                      (Clique em um time para filtrar tarefas)
+                    </span>
+                  </div>
                 </div>
-                {colaboradorSelecionado && (
+
+                {/* Abas: Times por CPF | Cobradores | Advogados */}
+                <div style={{ display: 'inline-flex', background: 'rgba(0,0,0,0.4)', borderRadius: '8px', padding: '3px', border: '1px solid rgba(199,199,199,0.1)' }}>
                   <button
                     type="button"
-                    onClick={() => { setColaboradorSelecionado(null); setPagina(1); }}
+                    onClick={() => setAbaRanking('times')}
+                    style={{
+                      background: abaRanking === 'times' ? 'rgba(245,221,144,0.2)' : 'transparent',
+                      color: abaRanking === 'times' ? '#f5dd90' : 'rgba(236,230,216,0.6)',
+                      border: abaRanking === 'times' ? '1px solid rgba(245,221,144,0.35)' : 'none',
+                      borderRadius: '6px',
+                      padding: '4px 10px',
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      transition: 'all 0.15s',
+                    }}
+                  >
+                    👥 Times por CPF ({timesFaturamento.length})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAbaRanking('cobradores')}
+                    style={{
+                      background: abaRanking === 'cobradores' ? 'rgba(245,221,144,0.2)' : 'transparent',
+                      color: abaRanking === 'cobradores' ? '#f5dd90' : 'rgba(236,230,216,0.6)',
+                      border: abaRanking === 'cobradores' ? '1px solid rgba(245,221,144,0.35)' : 'none',
+                      borderRadius: '6px',
+                      padding: '4px 10px',
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      transition: 'all 0.15s',
+                    }}
+                  >
+                    💼 Cobradores ({rankingFinanceiro?.cobradores?.length || 0})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setAbaRanking('advogados')}
+                    style={{
+                      background: abaRanking === 'advogados' ? 'rgba(245,221,144,0.2)' : 'transparent',
+                      color: abaRanking === 'advogados' ? '#f5dd90' : 'rgba(236,230,216,0.6)',
+                      border: abaRanking === 'advogados' ? '1px solid rgba(245,221,144,0.35)' : 'none',
+                      borderRadius: '6px',
+                      padding: '4px 10px',
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      transition: 'all 0.15s',
+                    }}
+                  >
+                    ⚖️ Advogados ({rankingFinanceiro?.advogados?.length || 0})
+                  </button>
+                </div>
+              </div>
+
+              {/* Tag de filtro ativo se houver */}
+              {(filtroEquipeId !== 'todas' || colaboradorSelecionado) && (
+                <div style={{ marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ fontSize: '11px', color: 'rgba(236,230,216,0.6)' }}>Filtro selecionado no ranking:</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFiltroEquipeId('todas');
+                      setColaboradorSelecionado(null);
+                      setPagina(1);
+                    }}
                     style={{
                       background: 'rgba(224,121,111,0.18)',
                       border: '1px solid rgba(224,121,111,0.4)',
@@ -514,160 +644,198 @@ export default function ModalTarefasMetrica({
                       cursor: 'pointer',
                       display: 'inline-flex',
                       alignItems: 'center',
-                      gap: '4px',
+                      gap: '5px',
                     }}
                   >
-                    <span>Filtrando: <strong>{colaboradorSelecionado.nome}</strong></span>
-                    <span>✕</span>
+                    <span>
+                      {filtroEquipeId !== 'todas'
+                        ? `Time: ${equipesDoPolo.find(e => e.id === filtroEquipeId)?.label || filtroEquipeId}`
+                        : `${colaboradorSelecionado.tipo === 'cobrador' ? 'Cobrador' : 'Advogado'}: ${colaboradorSelecionado.nome}`}
+                    </span>
+                    <span>✕ Limpar filtro</span>
                   </button>
-                )}
-              </div>
+                </div>
+              )}
 
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                {/* Coluna 1: Cobradores */}
-                <div
-                  style={{
-                    background: 'rgba(0,0,0,0.3)',
-                    border: '1px solid rgba(199,199,199,0.1)',
-                    borderRadius: '8px',
-                    padding: '8px 10px',
-                  }}
-                >
-                  <div style={{ fontSize: '11.5px', fontWeight: 700, color: '#ECE6D8', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                    <span>💼</span>
-                    <span>Top Cobradores</span>
-                    <span style={{ fontSize: '10px', color: 'rgba(236,230,216,0.45)', marginLeft: 'auto' }}>
-                      {rankingFinanceiro.cobradores.length} no polo
-                    </span>
-                  </div>
-                  {rankingFinanceiro.cobradores.length === 0 ? (
-                    <div style={{ fontSize: '11px', color: 'rgba(236,230,216,0.4)', padding: '6px 0' }}>
-                      Nenhum cobrador com tarefas neste polo.
-                    </div>
-                  ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', maxHeight: '140px', overflowY: 'auto' }}>
-                      {rankingFinanceiro.cobradores.slice(0, 5).map((cob, idx) => {
-                        const isSelected = colaboradorSelecionado?.tipo === 'cobrador' && colaboradorSelecionado?.nome === cob.nome;
-                        const medalha = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `${idx + 1}º`;
-                        return (
-                          <div
-                            key={cob.nome}
-                            onClick={() => {
-                              if (isSelected) setColaboradorSelecionado(null);
-                              else setColaboradorSelecionado({ nome: cob.nome, tipo: 'cobrador' });
-                              setPagina(1);
-                            }}
-                            title="Clique para filtrar tarefas deste cobrador"
-                            style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'space-between',
-                              padding: '5px 8px',
-                              borderRadius: '6px',
-                              background: isSelected ? 'rgba(245,221,144,0.18)' : 'rgba(255,255,255,0.03)',
-                              border: isSelected ? '1px solid #f5dd90' : '1px solid rgba(199,199,199,0.08)',
-                              cursor: 'pointer',
-                              transition: 'all 0.15s ease',
-                            }}
-                          >
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0 }}>
-                              <span style={{ fontSize: '11px', fontWeight: 800, width: '18px', textAlign: 'center' }}>
-                                {medalha}
+              {/* CONTEÚDO DA ABA ATIVA */}
+
+              {/* ABA 1: TIMES POR CPF */}
+              {abaRanking === 'times' && (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '8px', maxHeight: '180px', overflowY: 'auto', paddingRight: '4px' }}>
+                  {timesFaturamento.map((time, idx) => {
+                    const isSelected = filtroEquipeId === time.id;
+                    const medalha = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `${idx + 1}º`;
+                    return (
+                      <div
+                        key={time.id}
+                        onClick={() => {
+                          if (isSelected) setFiltroEquipeId('todas');
+                          else {
+                            setFiltroEquipeId(time.id);
+                            setColaboradorSelecionado(null);
+                          }
+                          setPagina(1);
+                        }}
+                        title="Clique para filtrar tarefas deste time (Cobrador + Advogado + CPF)"
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          padding: '8px 12px',
+                          borderRadius: '8px',
+                          background: isSelected ? 'rgba(245,221,144,0.18)' : 'rgba(255,255,255,0.03)',
+                          border: isSelected ? '1.5px solid #f5dd90' : '1px solid rgba(199,199,199,0.08)',
+                          cursor: 'pointer',
+                          transition: 'all 0.18s ease',
+                          gap: '10px',
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0, flex: 1 }}>
+                          <span style={{ fontSize: '13px', fontWeight: 800, width: '22px', textAlign: 'center', flexShrink: 0 }}>
+                            {medalha}
+                          </span>
+                          <div style={{ minWidth: 0, flex: 1 }}>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
+                              <span style={{ fontSize: '12px', fontWeight: 700, color: isSelected ? '#f5dd90' : '#ECE6D8' }}>
+                                💼 {time.cobrador}
                               </span>
-                              <span style={{ fontSize: '11.5px', fontWeight: 700, color: isSelected ? '#f5dd90' : '#ECE6D8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                {cob.nome}
-                              </span>
-                              <span style={{ fontSize: '10px', color: 'rgba(236,230,216,0.45)', flexShrink: 0 }}>
-                                ({cob.tarefasCount} {cob.tarefasCount === 1 ? 'tar' : 'tars'})
+                              <span style={{ fontSize: '11px', color: 'rgba(236,230,216,0.45)' }}>↔</span>
+                              <span style={{ fontSize: '12px', fontWeight: 700, color: isSelected ? '#f5dd90' : '#ECE6D8' }}>
+                                ⚖️ {time.advogado}
                               </span>
                             </div>
-                            <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                              <div style={{ fontSize: '11.5px', fontWeight: 800, color: '#f5dd90' }}>
-                                R$ {cob.totalFaturamento.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
-                              </div>
-                              <div style={{ fontSize: '9.5px', color: cob.taxaAdimplencia >= 70 ? '#5fc9a8' : 'rgba(236,230,216,0.5)' }}>
-                                {cob.taxaAdimplencia.toFixed(0)}% adimp.
-                              </div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '3px' }}>
+                              <span
+                                style={{
+                                  background: 'rgba(245,221,144,0.12)',
+                                  color: '#f5dd90',
+                                  fontSize: '10px',
+                                  fontWeight: 700,
+                                  borderRadius: '4px',
+                                  padding: '1px 6px',
+                                  border: '1px solid rgba(245,221,144,0.25)',
+                                }}
+                              >
+                                {time.cpfTexto}
+                              </span>
+                              <span style={{ fontSize: '10.5px', color: 'rgba(236,230,216,0.5)' }}>
+                                {time.qtdTarefas} tarefas
+                              </span>
                             </div>
                           </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
+                        </div>
 
-                {/* Coluna 2: Advogados */}
-                <div
-                  style={{
-                    background: 'rgba(0,0,0,0.3)',
-                    border: '1px solid rgba(199,199,199,0.1)',
-                    borderRadius: '8px',
-                    padding: '8px 10px',
-                  }}
-                >
-                  <div style={{ fontSize: '11.5px', fontWeight: 700, color: '#ECE6D8', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '5px' }}>
-                    <span>⚖️</span>
-                    <span>Top Advogados</span>
-                    <span style={{ fontSize: '10px', color: 'rgba(236,230,216,0.45)', marginLeft: 'auto' }}>
-                      {rankingFinanceiro.advogados.length} no polo
-                    </span>
-                  </div>
-                  {rankingFinanceiro.advogados.length === 0 ? (
-                    <div style={{ fontSize: '11px', color: 'rgba(236,230,216,0.4)', padding: '6px 0' }}>
-                      Nenhum advogado com tarefas neste polo.
-                    </div>
-                  ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', maxHeight: '140px', overflowY: 'auto' }}>
-                      {rankingFinanceiro.advogados.slice(0, 5).map((adv, idx) => {
-                        const isSelected = colaboradorSelecionado?.tipo === 'advogado' && colaboradorSelecionado?.nome === adv.nome;
-                        const medalha = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `${idx + 1}º`;
-                        return (
-                          <div
-                            key={adv.nome}
-                            onClick={() => {
-                              if (isSelected) setColaboradorSelecionado(null);
-                              else setColaboradorSelecionado({ nome: adv.nome, tipo: 'advogado' });
-                              setPagina(1);
-                            }}
-                            title="Clique para filtrar tarefas deste advogado"
-                            style={{
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'space-between',
-                              padding: '5px 8px',
-                              borderRadius: '6px',
-                              background: isSelected ? 'rgba(245,221,144,0.18)' : 'rgba(255,255,255,0.03)',
-                              border: isSelected ? '1px solid #f5dd90' : '1px solid rgba(199,199,199,0.08)',
-                              cursor: 'pointer',
-                              transition: 'all 0.15s ease',
-                            }}
-                          >
-                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0 }}>
-                              <span style={{ fontSize: '11px', fontWeight: 800, width: '18px', textAlign: 'center' }}>
-                                {medalha}
-                              </span>
-                              <span style={{ fontSize: '11.5px', fontWeight: 700, color: isSelected ? '#f5dd90' : '#ECE6D8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                                {adv.nome}
-                              </span>
-                              <span style={{ fontSize: '10px', color: 'rgba(236,230,216,0.45)', flexShrink: 0 }}>
-                                ({adv.tarefasCount} {adv.tarefasCount === 1 ? 'tar' : 'tars'})
-                              </span>
-                            </div>
-                            <div style={{ textAlign: 'right', flexShrink: 0 }}>
-                              <div style={{ fontSize: '11.5px', fontWeight: 800, color: '#f5dd90' }}>
-                                R$ {adv.totalFaturamento.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
-                              </div>
-                              <div style={{ fontSize: '9.5px', color: adv.taxaAdimplencia >= 70 ? '#5fc9a8' : 'rgba(236,230,216,0.5)' }}>
-                                {adv.taxaAdimplencia.toFixed(0)}% adimp.
-                              </div>
-                            </div>
+                        <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                          <div style={{ fontSize: '13px', fontWeight: 800, color: '#f5dd90' }}>
+                            R$ {time.totalFaturamento.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                           </div>
-                        );
-                      })}
-                    </div>
-                  )}
+                          <div style={{ fontSize: '10px', color: time.taxaAdimplencia >= 70 ? '#5fc9a8' : 'rgba(236,230,216,0.5)', marginTop: '2px' }}>
+                            {time.taxaAdimplencia.toFixed(0)}% adimplência
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
-              </div>
+              )}
+
+              {/* ABA 2: COBRADORES INDIVIDUAIS */}
+              {abaRanking === 'cobradores' && rankingFinanceiro && (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '6px', maxHeight: '180px', overflowY: 'auto' }}>
+                  {rankingFinanceiro.cobradores.map((cob, idx) => {
+                    const isSelected = colaboradorSelecionado?.tipo === 'cobrador' && colaboradorSelecionado?.nome === cob.nome;
+                    const medalha = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `${idx + 1}º`;
+                    return (
+                      <div
+                        key={cob.nome}
+                        onClick={() => {
+                          if (isSelected) setColaboradorSelecionado(null);
+                          else {
+                            setColaboradorSelecionado({ nome: cob.nome, tipo: 'cobrador' });
+                            setFiltroEquipeId('todas');
+                          }
+                          setPagina(1);
+                        }}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          padding: '6px 10px',
+                          borderRadius: '6px',
+                          background: isSelected ? 'rgba(245,221,144,0.18)' : 'rgba(255,255,255,0.03)',
+                          border: isSelected ? '1px solid #f5dd90' : '1px solid rgba(199,199,199,0.08)',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0 }}>
+                          <span style={{ fontSize: '11px', fontWeight: 800, width: '18px', textAlign: 'center' }}>{medalha}</span>
+                          <span style={{ fontSize: '11.5px', fontWeight: 700, color: isSelected ? '#f5dd90' : '#ECE6D8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {cob.nome}
+                          </span>
+                          <span style={{ fontSize: '10px', color: 'rgba(236,230,216,0.45)' }}>({cob.tarefasCount})</span>
+                        </div>
+                        <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                          <div style={{ fontSize: '11.5px', fontWeight: 800, color: '#f5dd90' }}>
+                            R$ {cob.totalFaturamento.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                          </div>
+                          <div style={{ fontSize: '9.5px', color: cob.taxaAdimplencia >= 70 ? '#5fc9a8' : 'rgba(236,230,216,0.5)' }}>
+                            {cob.taxaAdimplencia.toFixed(0)}% adimp.
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {/* ABA 3: ADVOGADOS INDIVIDUAIS */}
+              {abaRanking === 'advogados' && rankingFinanceiro && (
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '6px', maxHeight: '180px', overflowY: 'auto' }}>
+                  {rankingFinanceiro.advogados.map((adv, idx) => {
+                    const isSelected = colaboradorSelecionado?.tipo === 'advogado' && colaboradorSelecionado?.nome === adv.nome;
+                    const medalha = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `${idx + 1}º`;
+                    return (
+                      <div
+                        key={adv.nome}
+                        onClick={() => {
+                          if (isSelected) setColaboradorSelecionado(null);
+                          else {
+                            setColaboradorSelecionado({ nome: adv.nome, tipo: 'advogado' });
+                            setFiltroEquipeId('todas');
+                          }
+                          setPagina(1);
+                        }}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          padding: '6px 10px',
+                          borderRadius: '6px',
+                          background: isSelected ? 'rgba(245,221,144,0.18)' : 'rgba(255,255,255,0.03)',
+                          border: isSelected ? '1px solid #f5dd90' : '1px solid rgba(199,199,199,0.08)',
+                          cursor: 'pointer',
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0 }}>
+                          <span style={{ fontSize: '11px', fontWeight: 800, width: '18px', textAlign: 'center' }}>{medalha}</span>
+                          <span style={{ fontSize: '11.5px', fontWeight: 700, color: isSelected ? '#f5dd90' : '#ECE6D8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {adv.nome}
+                          </span>
+                          <span style={{ fontSize: '10px', color: 'rgba(236,230,216,0.45)' }}>({adv.tarefasCount})</span>
+                        </div>
+                        <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                          <div style={{ fontSize: '11.5px', fontWeight: 800, color: '#f5dd90' }}>
+                            R$ {adv.totalFaturamento.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                          </div>
+                          <div style={{ fontSize: '9.5px', color: adv.taxaAdimplencia >= 70 ? '#5fc9a8' : 'rgba(236,230,216,0.5)' }}>
+                            {adv.taxaAdimplencia.toFixed(0)}% adimp.
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           </div>
         )}
