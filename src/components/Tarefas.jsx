@@ -45,7 +45,13 @@ export default function Tarefas({
 
   const alternarOrdem = (colKey) => {
     if (colunaOrdem === colKey) {
-      setDirecaoOrdem((d) => (d === 'asc' ? 'desc' : 'asc'));
+      if (direcaoOrdem === 'asc') {
+        setDirecaoOrdem('desc');
+      } else if (direcaoOrdem === 'desc') {
+        // 3º clique: volta ao padrão (sem ordenação)
+        setColunaOrdem(null);
+        setDirecaoOrdem('asc');
+      }
     } else {
       setColunaOrdem(colKey);
       setDirecaoOrdem('asc');
@@ -77,6 +83,7 @@ export default function Tarefas({
   }, [tarefas, filtros]);
 
   const ordenadas = useMemo(() => {
+    if (!colunaOrdem) return filtradas;
     return [...filtradas].sort((a, b) => {
       let vA, vB;
       switch (colunaOrdem) {
@@ -202,8 +209,38 @@ export default function Tarefas({
       </div>
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
-        <div style={s('font-size:11.5px;color:rgba(236,230,216,0.4);')}>
-          Mostrando {filtradas.length} de {tarefas.length} tarefas (ordenadas por {COLUNAS_TABELA.find((c) => c.key === colunaOrdem)?.label} {direcaoOrdem === 'asc' ? '▲' : '▼'})
+        <div style={s('font-size:11.5px;color:rgba(236,230,216,0.45);display:flex;align-items:center;gap:10px;')}>
+          <span>
+            Mostrando {filtradas.length} de {tarefas.length} tarefas
+            {colunaOrdem ? (
+              <> (ordenadas por {COLUNAS_TABELA.find((c) => c.key === colunaOrdem)?.label} {direcaoOrdem === 'asc' ? '▲' : '▼'})</>
+            ) : (
+              <> (ordem padrão)</>
+            )}
+          </span>
+          {colunaOrdem && (
+            <button
+              type="button"
+              onClick={() => {
+                setColunaOrdem(null);
+                setDirecaoOrdem('asc');
+              }}
+              style={{
+                background: 'rgba(245,221,144,0.1)',
+                border: '1px solid rgba(245,221,144,0.3)',
+                borderRadius: '5px',
+                color: '#f5dd90',
+                padding: '2px 8px',
+                fontSize: '11px',
+                fontWeight: 600,
+                cursor: 'pointer',
+                transition: 'background 0.15s ease',
+              }}
+              title="Voltar para a ordem padrão das tarefas"
+            >
+              ✕ Voltar ao padrão
+            </button>
+          )}
         </div>
       </div>
 

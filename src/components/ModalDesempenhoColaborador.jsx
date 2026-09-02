@@ -1,4 +1,5 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 
 // Estilos utilitários inline
 const s = (str) => {
@@ -54,30 +55,77 @@ export default function ModalDesempenhoColaborador({
   const [pagina, setPagina] = useState(1);
   const ITENS_POR_PAGINA = 15;
 
+  useEffect(() => {
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prevOverflow;
+    };
+  }, []);
+
   if (!colaborador) return null;
 
-  // 1. Filtra as tarefas deste colaborador/advogado
+  // 1. Filtra as tarefas deste colaborador/advogado respeitando polo, regras de CPF e 48h
   const tarefasDoColaborador = useMemo(() => {
     const nomeNorm = (colaborador.nome || '').toLowerCase().trim();
     const papel = (colaborador.papel || '').toLowerCase();
+    const polo = colaborador.polo;
+    const ehEscalao48h = Boolean(colaborador.ehEscalao48h);
+    const digitosCpf = Array.isArray(colaborador.digitosCpf) ? colaborador.digitosCpf : [];
 
     return tarefas.filter((t) => {
-      const cobrador = (
+      // Se a regra pertence a um polo específico, tarefa deve ser desse polo
+      if (polo && t.poloCobranca && t.poloCobranca !== polo) {
+        return false;
+      }
+
+      const cobradorNome = (
         t.equipeCobrancaColaboradorNome ||
         t.colaboradorNome ||
-        t.responsavelNome ||
         ''
       ).toLowerCase().trim();
-      const advogado = (
+
+      const advogadoNome = (
         t.equipeCobrancaAdvogado ||
         t.advogado ||
         ''
       ).toLowerCase().trim();
 
       if (papel.includes('advogad')) {
-        return advogado.includes(nomeNorm) || nomeNorm.includes(advogado);
+        if (advogadoNome && (advogadoNome.includes(nomeNorm) || nomeNorm.includes(advogadoNome))) {
+          return true;
+        }
+        if (digitosCpf.length > 0 && t.digitoCpfCliente != null && digitosCpf.includes(Number(t.digitoCpfCliente))) {
+          return true;
+        }
+        return false;
       }
-      return cobrador.includes(nomeNorm) || nomeNorm.includes(cobrador);
+
+      // Cobrador(a):
+      // A) Nome atribuído bate diretamente com o cobrador
+      if (cobradorNome && (cobradorNome.includes(nomeNorm) || nomeNorm.includes(cobradorNome))) {
+        return true;
+      }
+
+      // B) Regra de contingência 48 horas
+      if (ehEscalao48h) {
+        return Boolean(t.emEscalao48h || t.ehEscalao48h);
+      }
+
+      // C) Regra por dígitos de CPF
+      if (digitosCpf.length > 0 && t.digitoCpfCliente != null && digitosCpf.includes(Number(t.digitoCpfCliente))) {
+        return true;
+      }
+
+      // D) Fallback por responsavelNome somente se NÃO houver critério de CPF ou 48h
+      if (digitosCpf.length === 0 && !ehEscalao48h) {
+        const resp = (t.responsavelNome || '').toLowerCase().trim();
+        if (resp && (resp.includes(nomeNorm) || nomeNorm.includes(resp))) {
+          return true;
+        }
+      }
+
+      return false;
     });
   }, [tarefas, colaborador]);
 
@@ -101,6 +149,8 @@ export default function ModalDesempenhoColaborador({
         ? new Date(t.finalizadoEm).getTime()
         : t.atualizadoEm
         ? new Date(t.atualizadoEm).getTime()
+        : t.atendidoEm
+        ? new Date(t.atendidoEm).getTime()
         : null;
 
       if (inicio && fim && fim >= inicio) {
@@ -114,22 +164,22 @@ export default function ModalDesempenhoColaborador({
         ? somaTempoConclusaoMs / qtdTarefasConcluidasComDatas
         : null;
 
-    // Média de tempo entre as atividades da tarefa
+    // Média de tempo entre as atividades da tarefa (intervalo de atendimento)
     let somaTempoAtividadesMs = 0;
     let qtdTarefasComAtividade = 0;
 
     tarefasDoColaborador.forEach((t) => {
       const inicio = t.criadoEm ? new Date(t.criadoEm).getTime() : null;
-      const primeiraAtiv = t.primeiraAtividadeEm
-        ? new Date(t.primeiraAtividadeEm).getTime()
+      const atividade = t.atendidoEm
+        ? new Date(t.atendidoEm).getTime()
+        : t.atualizadoEm && t.atualizadoEm !== t.criadoEm
+        ? new Date(t.atualizadoEm).getTime()
+        : t.finalizadoEm
+        ? new Date(t.finalizadoEm).getTime()
         : null;
-      const fim = t.finalizadoEm ? new Date(t.finalizadoEm).getTime() : null;
 
-      if (inicio && primeiraAtiv && primeiraAtiv >= inicio) {
-        somaTempoAtividadesMs += primeiraAtiv - inicio;
-        qtdTarefasComAtividade++;
-      } else if (inicio && fim && fim >= inicio) {
-        somaTempoAtividadesMs += (fim - inicio) / 2;
+      if (inicio && atividade && atividade >= inicio) {
+        somaTempoAtividadesMs += atividade - inicio;
         qtdTarefasComAtividade++;
       }
     });
@@ -185,14 +235,14 @@ export default function ModalDesempenhoColaborador({
 
   const corBadge = corPolo[colaborador.polo] || '#5b9bdb';
 
-  return (
+  const modalNode = (
     <div
       style={{
         position: 'fixed',
         inset: 0,
         backgroundColor: 'rgba(0, 0, 0, 0.78)',
         backdropFilter: 'blur(5px)',
-        zIndex: 9999,
+        zIndex: 99999,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
@@ -744,4 +794,10 @@ export default function ModalDesempenhoColaborador({
       </div>
     </div>
   );
+
+  if (typeof document !== 'undefined' && document.body) {
+    return createPortal(modalNode, document.body);
+  }
+
+  return modalNode;
 }

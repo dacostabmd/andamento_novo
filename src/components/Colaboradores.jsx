@@ -299,6 +299,8 @@ export default function Colaboradores({
                         polo: item.polo,
                         criterio: formatarCriterioTexto(item),
                         email: item.email,
+                        ehEscalao48h: item.ehEscalao48h,
+                        digitosCpf: item.digitosCpf,
                       })
                     }
                     title="Clique para ver o desempenho deste colaborador nas tarefas"
@@ -375,6 +377,8 @@ export default function Colaboradores({
                           papel: 'Advogado(a)',
                           polo: item.polo,
                           criterio: formatarCriterioTexto(item),
+                          ehEscalao48h: item.ehEscalao48h,
+                          digitosCpf: item.digitosCpf,
                         });
                       }
                     }}

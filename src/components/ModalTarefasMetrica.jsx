@@ -141,7 +141,12 @@ export default function ModalTarefasMetrica({
 
   const alternarOrdem = (colunaKey) => {
     if (ordemColuna === colunaKey) {
-      setOrdemDirecao((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+      if (ordemDirecao === 'asc') {
+        setOrdemDirecao('desc');
+      } else if (ordemDirecao === 'desc') {
+        setOrdemColuna(null);
+        setOrdemDirecao('asc');
+      }
     } else {
       setOrdemColuna(colunaKey);
       setOrdemDirecao('asc');
