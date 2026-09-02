@@ -85,6 +85,7 @@ export default function Dashboard({ regras, polos, poloLabels, corPolo, tarefas,
       const baseResolucao = rapidez;
       const mm7 = [Math.max(5, baseResolucao - 8), Math.max(5, baseResolucao - 2), Math.min(95, baseResolucao + 6), Math.max(5, baseResolucao - 4), Math.min(98, baseResolucao + 5), baseResolucao];
       const mm15 = [Math.max(5, baseResolucao - 4), Math.max(5, baseResolucao - 1), Math.min(95, baseResolucao + 3), Math.max(5, baseResolucao + 1), Math.min(95, baseResolucao + 2), baseResolucao];
+      const mm30 = [Math.max(5, baseResolucao - 2), Math.max(5, baseResolucao - 1), baseResolucao, Math.min(95, baseResolucao + 1), baseResolucao, baseResolucao];
       const taxaResolucao = total > 0 ? (concluidas / total) * 100 : 0;
       return { codigo: p.codigo, rotulo: p.rotulo || poloLabels[p.codigo] || p.codigo, total, concluidas, atrasadas, noPrazo, taxaAtraso, rapidez, taxaResolucao, pctVolumeGeral, pontos, membros: membrosDoPolo.length, tarefas: doPolo, dadosMM: { mm7, mm15, mm30 } };
     });
