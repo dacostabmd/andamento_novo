@@ -310,7 +310,10 @@ export default function Dashboard({ regras, polos, poloLabels, corPolo, tarefas,
       let valA = a[tabelaOrdemColuna];
       let valB = b[tabelaOrdemColuna];
       if (typeof valA === 'string') return tabelaOrdemDir === 'asc' ? valA.localeCompare(valB, 'pt-BR') : valB.localeCompare(valA, 'pt-BR');
-      return tabelaOrdemDir === 'asc' ? (valA || 0) - (valB || 0) : (valB || 0) - (valA || 0);
+      const diff = tabelaOrdemDir === 'asc' ? (valA || 0) - (valB || 0) : (valB || 0) - (valA || 0);
+      if (diff !== 0) return diff;
+      // Desempate secundário inteligente: maior pontuação (concluídas) e volume total
+      return (b.pontos || 0) - (a.pontos || 0) || (b.total || 0) - (a.total || 0);
     });
     return lista;
   }, [porPolo, tabelaOrdemColuna, tabelaOrdemDir]);
