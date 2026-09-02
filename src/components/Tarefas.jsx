@@ -5,7 +5,7 @@ import { COR_STATUS, STATUS_LABEL, BTN_PAG, BTN_PAG_OFF } from '../data.js';
 const TH = 'text-align:left;padding:12px 16px;font-weight:700;font-size:11.5px;color:rgba(236,230,216,0.6);border-bottom:1px solid rgba(199,199,199,0.16);';
 const LABEL = 'font-size:10.5px;font-weight:700;text-transform:uppercase;letter-spacing:0.04em;color:rgba(236,230,216,0.5);display:block;margin-bottom:6px;';
 const FIELD = 'width:100%;background:#161616;border:1px solid rgba(199,199,199,0.25);border-radius:8px;padding:10px 12px;color:#ECE6D8;font-family:inherit;font-size:13px;';
-const PAGE_SIZE = 8;
+const PAGE_SIZE = 20;
 
 function formatarPrazo(prazoFinal) {
   if (!prazoFinal) return '—';
@@ -99,13 +99,13 @@ export default function Tarefas({ tarefas, poloLabels, corPolo, filtros, setFilt
                 <tr key={t.id} className="task-row" onClick={() => onAbrirBitrix(t)} style={s('border-bottom:1px solid rgba(199,199,199,0.08);cursor:pointer;')}>
                   <td style={s('padding:10px 16px;font-weight:600;')}>{t.clienteNome || t.titulo}</td>
                   <td style={s('padding:10px 16px;')}>
-                    <span style={{ backgroundColor: corPoloAtual + '20', color: corPoloAtual, border: '1px solid ' + corPoloAtual + '40', borderRadius: '6px', padding: '3px 9px', fontSize: '11px', fontWeight: 700 }}>{t.poloCobranca ? poloLabels[t.poloCobranca] : 'Sem vínculo'}</span>
+                    <span style={{ backgroundColor: corPoloAtual + '20', color: corPoloAtual, border: '1px solid ' + corPoloAtual + '40', borderRadius: '6px', padding: '3px 9px', fontSize: '11px', fontWeight: 700, whiteSpace: 'nowrap' }}>{t.poloCobranca ? poloLabels[t.poloCobranca] : 'Sem vínculo'}</span>
                   </td>
                   <td style={s('padding:10px 16px;')}>{t.equipeCobrancaColaboradorNome || '—'}</td>
                   <td style={s('padding:10px 16px;color:rgba(236,230,216,0.75);')}>{t.equipeCobrancaAdvogado || 'Sem advogado'}</td>
-                  <td style={s('padding:10px 16px;font-size:11.5px;color:rgba(236,230,216,0.55);')}>{t.emEscalao48h ? '48 HORAS' : 'CPF final ' + t.digitoCpfCliente}</td>
+                  <td style={s('padding:10px 16px;font-size:11.5px;color:rgba(236,230,216,0.55);')}>{t.emEscalao48h ? '48 HORAS' : (t.digitoCpfCliente != null ? 'CPF final ' + t.digitoCpfCliente : '—')}</td>
                   <td style={s('padding:10px 16px;')}>
-                    <span style={{ backgroundColor: corStatus + '22', color: corStatus, border: '1px solid ' + corStatus + '44', borderRadius: '999px', padding: '3px 11px', fontSize: '11px', fontWeight: 700 }}>{STATUS_LABEL[t.situacaoPrazo]}</span>
+                    <span style={{ backgroundColor: corStatus + '22', color: corStatus, border: '1px solid ' + corStatus + '44', borderRadius: '999px', padding: '3px 11px', fontSize: '11px', fontWeight: 700, whiteSpace: 'nowrap' }}>{STATUS_LABEL[t.situacaoPrazo]}</span>
                   </td>
                   <td style={s('padding:10px 16px;color:rgba(236,230,216,0.55);font-size:12px;')}>{formatarPrazo(t.prazoFinal)}</td>
                   <td style={s('padding:10px 16px;text-align:center;')}>

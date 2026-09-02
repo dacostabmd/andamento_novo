@@ -171,31 +171,39 @@ export default function Dashboard({ regras, polos, poloLabels, corPolo, tarefas,
               className="polo-card"
               onClick={() => handleClickPolo(base)}
               title={`Clique para visualizar tarefas de ${poloLabels[base.codigo] || base.codigo}`}
-              style={s('background:#111111;border:1px solid rgba(199,199,199,0.16);border-radius:12px;padding:16px;cursor:pointer;transition:transform 0.15s ease, border-color 0.2s ease;')}
+              style={s('background:#111111;border:1px solid rgba(199,199,199,0.16);border-radius:12px;padding:16px;cursor:pointer;transition:transform 0.15s ease, border-color 0.2s ease;display:flex;flex-direction:column;justify-content:space-between;min-height:135px;')}
             >
-              <div style={s('display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;')}>
-                <span
-                  title={poloLabels[base.codigo] || base.codigo}
-                  style={{
-                    backgroundColor: cor + '20',
-                    color: cor,
-                    border: '1px solid ' + cor + '40',
-                    borderRadius: '6px',
-                    padding: '3px 10px',
-                    fontSize: '11.5px',
-                    fontWeight: 700,
-                    letterSpacing: '0.02em',
-                  }}
-                >
-                  {base.codigo}
-                </span>
-                <span style={s('font-size:11px;color:rgba(236,230,216,0.5);')}>{base.membros} membros</span>
-              </div>
-              <div style={s('display:flex;justify-content:space-between;align-items:flex-end;')}>
-                <div>
-                  <div style={s('font-size:10.5px;color:rgba(236,230,216,0.5);')}>Total de tarefas</div>
-                  <div style={s('font-size:17px;font-weight:700;')}>{base.total}</div>
+              <div style={{ marginBottom: '14px' }}>
+                <div style={{ marginBottom: '5px' }}>
+                  <span
+                    title={poloLabels[base.codigo] || base.codigo}
+                    style={{
+                      display: 'inline-block',
+                      backgroundColor: cor + '20',
+                      color: cor,
+                      border: '1px solid ' + cor + '40',
+                      borderRadius: '6px',
+                      padding: '3px 8px',
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      letterSpacing: '0.02em',
+                      lineHeight: 1.35,
+                    }}
+                  >
+                    {base.codigo.split('_').join(', ')}
+                  </span>
                 </div>
+                <div style={s('font-size:11px;color:rgba(236,230,216,0.5);')}>
+                  {base.membros} membros
+                </div>
+              </div>
+
+              <div>
+                <div style={s('display:flex;justify-content:space-between;align-items:flex-end;')}>
+                  <div>
+                    <div style={s('font-size:10.5px;color:rgba(236,230,216,0.5);')}>Total de tarefas</div>
+                    <div style={s('font-size:17px;font-weight:700;')}>{base.total}</div>
+                  </div>
                 <div style={s('text-align:right;')}>
                   <div style={s('font-size:10.5px;color:rgba(236,230,216,0.5);')}>Taxa de atraso</div>
                   <div style={{ fontSize: '13px', fontWeight: 700, color: base.taxaAtraso > 50 ? '#e0796f' : '#5fc9a8' }}>{base.taxaAtraso.toFixed(1)}%</div>
@@ -203,6 +211,7 @@ export default function Dashboard({ regras, polos, poloLabels, corPolo, tarefas,
               </div>
               <div style={s('height:5px;background:rgba(199,199,199,0.14);border-radius:99px;margin-top:10px;overflow:hidden;')}>
                 <div style={{ height: '100%', background: '#5fc9a8', borderRadius: '99px', width: Math.max(4, 100 - base.taxaAtraso) + '%' }} />
+              </div>
               </div>
             </div>
           );

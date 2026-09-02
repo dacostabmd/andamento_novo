@@ -23,6 +23,7 @@ import {
   excluirPermissao,
 } from './services/equipeCobrancaApi.js';
 import { obterUsuarioAtual } from './services/bitrixSdk.js';
+import { montarLinkTarefaBitrix } from './services/bitrixLink.js';
 import {
   MOCK_POLOS,
   MOCK_REGRAS,
@@ -157,6 +158,24 @@ export default function App() {
     toastTimer.current = setTimeout(() => setToastMsg(''), 2800);
   }
 
+  function abrirTarefaNoBitrix(tarefa) {
+    const link = montarLinkTarefaBitrix(tarefa);
+    if (link) {
+      // Quando embutido no Bitrix (iframe do app), navega a aba de verdade do
+      // portal — window.location aqui dentro só trocaria o conteúdo do iframe.
+      const alvo = window.top || window;
+      try {
+        alvo.location.href = link;
+      } catch {
+        // Cross-origin bloqueado (portal com domínio diferente do esperado):
+        // window.top existe mas não é acessível — cai para a janela atual.
+        window.location.href = link;
+      }
+    } else {
+      mostrarToast('Esta tarefa não tem link do Bitrix disponível.');
+    }
+  }
+
   function abrirNovo() {
     setIndiceEmEdicao(null);
     setForm({ ...FORM_VAZIO, polo: codigosPolo[0] || '' });
@@ -253,7 +272,7 @@ export default function App() {
         setScreen={navegarPara}
         usuario={usuarioEfetivo}
         ehAdmin={ehAdmin}
-        onToggleSimulacao={() => setSimulandoColaborador((v) => !v)}
+        onToggleSimulacao={usuario ? undefined : () => setSimulandoColaborador((v) => !v)}
       />
 
       <main style={s('flex:1;padding:32px 40px;overflow-y:auto;height:100vh;position:relative;')}>
@@ -312,7 +331,7 @@ export default function App() {
                 pagina={paginaTarefas}
                 setPagina={setPaginaTarefas}
                 advogados={advogados}
-                onAbrirBitrix={(t) => t.linkTarefa ? window.open(t.linkTarefa, '_blank', 'noopener') : mostrarToast('Esta tarefa não tem link do Bitrix disponível.')}
+                onAbrirBitrix={abrirTarefaNoBitrix}
               />
             )}
             {screen === 'permissoes' && (
@@ -367,11 +386,7 @@ export default function App() {
           poloLabels={poloLabels}
           corPolo={corPolo}
           corDestaque={modalMetrica.cor || '#5b9bdb'}
-          onAbrirBitrix={(t) =>
-            t.linkTarefa
-              ? window.open(t.linkTarefa, '_blank', 'noopener')
-              : mostrarToast('Esta tarefa não tem link do Bitrix disponível.')
-          }
+          onAbrirBitrix={abrirTarefaNoBitrix}
           onFechar={() => setModalMetrica(null)}
         />
       )}

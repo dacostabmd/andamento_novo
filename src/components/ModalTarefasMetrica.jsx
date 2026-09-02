@@ -4,7 +4,7 @@ import { IconX, IconSearch, IconExternal } from './Icons.jsx';
 import { COR_STATUS, STATUS_LABEL, BTN_PAG, BTN_PAG_OFF } from '../data.js';
 import AnimatedList from './AnimatedList.jsx';
 
-const PAGE_SIZE = 5;
+const PAGE_SIZE = 20;
 
 const COLUNAS_ORDENACAO = [
   { key: 'cliente', label: 'Cliente' },

@@ -1,10 +1,10 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { s } from '../style.js';
 import { IconX } from './Icons.jsx';
 import { COR_STATUS, STATUS_LABEL, BTN_PAG, BTN_PAG_OFF } from '../data.js';
 
 const TH = 'text-align:left;padding:8px 10px;font-size:10.5px;color:rgba(236,230,216,0.5);border-bottom:1px solid rgba(199,199,199,0.14);';
-const PAGE_SIZE = 6;
+const PAGE_SIZE = 20;
 
 function formatarPrazo(prazoFinal) {
   if (!prazoFinal) return '—';
