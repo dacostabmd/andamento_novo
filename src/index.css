@@ -16,7 +16,31 @@ select option { background: #161616; color: #ECE6D8; }
 .btn-ghost:hover { border-color: #f5dd90; color: #f5dd90; }
 .icon-btn:hover { border-color: #f5dd90; color: #f5dd90; }
 .icon-btn-danger:hover { border-color: #e0796f; color: #e0796f; }
-.polo-card:hover { border-color: #f5dd90; }
+
+/* Hover ultra-suave com aceleração por hardware para os cards de polos */
+.polo-card {
+  position: relative;
+  transition: transform 0.45s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.45s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.3s ease !important;
+  will-change: transform, box-shadow;
+  transform: translateZ(0);
+}
+
+.polo-card:hover {
+  transform: translateY(-4px) scale(1.024) translateZ(0) !important;
+  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.75), 0 0 0 1px rgba(245, 221, 144, 0.4) !important;
+  border-color: rgba(245, 221, 144, 0.55) !important;
+  z-index: 25 !important;
+}
+
+.polo-card .legend-badge {
+  transition: background 0.3s ease, border-color 0.3s ease;
+}
+
+.polo-card:hover .legend-badge {
+  background: rgba(255, 255, 255, 0.06) !important;
+  border-color: rgba(245, 221, 144, 0.35) !important;
+}
+
 .task-row:hover { background: rgba(245,221,144,0.05); }
 .sug-item:hover { background: rgba(245,221,144,0.08); }
 .picker-item:hover { border-color: #f5dd90; background: rgba(245,221,144,0.06); }

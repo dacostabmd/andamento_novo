@@ -8,7 +8,7 @@ const CARD = 'background:rgba(255,255,255,0.02);border:1px solid rgba(199,199,19
 const CARD_LABEL = 'font-size:11px;color:rgba(236,230,216,0.5);';
 const CARD_SUB = 'font-size:10px;color:rgba(236,230,216,0.4);margin-top:2px;';
 
-function InfograficoProjecao({ dadosMM, isHovered }) {
+function InfograficoProjecao({ dadosMM }) {
   const width = 200;
   const height = isHovered ? 82 : 54;
 
@@ -142,24 +142,29 @@ export default function Dashboard({ regras, polos, poloLabels, corPolo, tarefas,
     const taxaAtraso = total > 0 ? (atrasadas / total) * 100 : 0;
 
     let totalCobranca = 0;
-    let totalRecebido = 0;
-    let totalInadimplente = 0;
+    let totalCobrancaAdimplente = 0;
+    let totalCobrancaInadimplente = 0;
     let adimplentes = 0;
     let inadimplentes = 0;
 
     for (const t of tarefas) {
-      if (typeof t.valorCobranca === 'number' && !isNaN(t.valorCobranca)) totalCobranca += t.valorCobranca;
-      if (typeof t.valorRecebidoAsaas === 'number' && !isNaN(t.valorRecebidoAsaas)) totalRecebido += t.valorRecebidoAsaas;
-      if (typeof t.valorInadimplente === 'number' && !isNaN(t.valorInadimplente)) totalInadimplente += t.valorInadimplente;
+      const val = (typeof t.valorCobranca === 'number' && !isNaN(t.valorCobranca)) ? t.valorCobranca : 0;
+      totalCobranca += val;
+
       const sit = (t.situacaoFinanceira || '').toUpperCase();
-      if (sit === 'ADIMPLENTE') adimplentes++;
-      else if (sit === 'INADIMPLENTE') inadimplentes++;
+      if (sit === 'ADIMPLENTE') {
+        adimplentes++;
+        totalCobrancaAdimplente += val;
+      } else if (sit === 'INADIMPLENTE') {
+        inadimplentes++;
+        totalCobrancaInadimplente += val;
+      }
     }
 
-    const totalFat = totalCobranca > 0 ? totalCobranca : (totalRecebido + totalInadimplente);
-    const somaAsaasGeral = totalRecebido + totalInadimplente;
-    const pctAdimplenteGeral = somaAsaasGeral > 0
-      ? (totalRecebido / somaAsaasGeral) * 100
+    const totalFat = totalCobranca;
+    const totalComSituacao = totalCobrancaAdimplente + totalCobrancaInadimplente;
+    const pctAdimplenteGeral = totalComSituacao > 0
+      ? (totalCobrancaAdimplente / totalComSituacao) * 100
       : ((adimplentes + inadimplentes) > 0 ? (adimplentes / (adimplentes + inadimplentes)) * 100 : 100);
 
     if (criterio === 'faturamento') {
@@ -174,23 +179,23 @@ export default function Dashboard({ regras, polos, poloLabels, corPolo, tarefas,
         {
           valor: `${pctAdimplenteGeral.toFixed(1)}%`,
           label: 'TAXA DE ADIMPLÊNCIA',
-          desc: `${adimplentes} adimplentes de ${adimplentes + inadimplentes} clientes`,
+          desc: `${adimplentes} adimplentes de ${adimplentes + inadimplentes} clientes mapeados`,
           n: pctAdimplenteGeral,
           isPct: true,
           cor: pctAdimplenteGeral >= 75 ? '#5fc9a8' : '#f5dd90',
         },
         {
-          valor: `R$ ${totalRecebido.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`,
-          label: 'RECEBIDO (ASAAS)',
-          desc: `${adimplentes} cobranças liquidadas com sucesso`,
-          n: totalRecebido,
+          valor: `R$ ${totalCobrancaAdimplente.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`,
+          label: 'RECEBIDO (ADIMPLENTE)',
+          desc: `${adimplentes} cobranças adimplentes no Asaas`,
+          n: totalCobrancaAdimplente,
           cor: '#5fc9a8',
         },
         {
-          valor: `R$ ${totalInadimplente.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`,
+          valor: `R$ ${totalCobrancaInadimplente.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`,
           label: 'INADIMPLENTE (ASAAS)',
           desc: `${inadimplentes} cobranças vencidas / em atraso`,
-          n: totalInadimplente,
+          n: totalCobrancaInadimplente,
           cor: '#e0796f',
         },
       ];
@@ -236,39 +241,30 @@ export default function Dashboard({ regras, polos, poloLabels, corPolo, tarefas,
 
       // Métricas Financeiras / Faturamento & Asaas
       let totalValorCobranca = 0;
-      let totalRecebidoAsaas = 0;
-      let totalInadimplente = 0;
+      let totalCobrancaAdimplente = 0;
+      let totalCobrancaInadimplente = 0;
       let adimplentesCount = 0;
       let inadimplentesCount = 0;
 
       for (const t of doPolo) {
-        if (typeof t.valorCobranca === 'number' && !isNaN(t.valorCobranca)) {
-          totalValorCobranca += t.valorCobranca;
-        }
-        if (typeof t.valorRecebidoAsaas === 'number' && !isNaN(t.valorRecebidoAsaas)) {
-          totalRecebidoAsaas += t.valorRecebidoAsaas;
-        }
-        if (typeof t.valorInadimplente === 'number' && !isNaN(t.valorInadimplente)) {
-          totalInadimplente += t.valorInadimplente;
-        }
+        const val = (typeof t.valorCobranca === 'number' && !isNaN(t.valorCobranca)) ? t.valorCobranca : 0;
+        totalValorCobranca += val;
 
         const sit = (t.situacaoFinanceira || '').toUpperCase();
         if (sit === 'ADIMPLENTE') {
           adimplentesCount++;
+          totalCobrancaAdimplente += val;
         } else if (sit === 'INADIMPLENTE') {
           inadimplentesCount++;
+          totalCobrancaInadimplente += val;
         }
       }
 
-      const totalFaturamento = totalValorCobranca > 0 
-        ? totalValorCobranca 
-        : (totalRecebidoAsaas + totalInadimplente);
-
-      const totalFinanceiroMapeado = adimplentesCount + inadimplentesCount;
-      const somaAsaas = totalRecebidoAsaas + totalInadimplente;
-      const taxaAdimplencia = somaAsaas > 0 
-        ? (totalRecebidoAsaas / somaAsaas) * 100 
-        : (totalFinanceiroMapeado > 0 ? (adimplentesCount / totalFinanceiroMapeado) * 100 : 100);
+      const totalFaturamento = totalValorCobranca;
+      const totalComSit = totalCobrancaAdimplente + totalCobrancaInadimplente;
+      const taxaAdimplencia = totalComSit > 0 
+        ? (totalCobrancaAdimplente / totalComSit) * 100 
+        : ((adimplentesCount + inadimplentesCount) > 0 ? (adimplentesCount / (adimplentesCount + inadimplentesCount)) * 100 : 100);
 
       return {
         codigo: p.codigo,
@@ -286,8 +282,8 @@ export default function Dashboard({ regras, polos, poloLabels, corPolo, tarefas,
         tarefas: doPolo,
         dadosMM: { mm7, mm15, mm30 },
         totalValorCobranca,
-        totalRecebidoAsaas,
-        totalInadimplente,
+        totalCobrancaAdimplente,
+        totalCobrancaInadimplente,
         totalFaturamento,
         adimplentesCount,
         inadimplentesCount,
@@ -568,30 +564,17 @@ export default function Dashboard({ regras, polos, poloLabels, corPolo, tarefas,
             corBarra = corMetrica;
           }
 
-          // Estilo dinâmico com expansão especial para Projeção de Atendimento ao hover
           let cardStyle = {
             background: '#111111',
-            border: isHovered
-              ? '1px solid rgba(245,221,144,0.5)'
-              : '1px solid rgba(199,199,199,0.16)',
+            border: '1px solid rgba(199,199,199,0.16)',
             borderRadius: '12px',
             padding: '16px',
             cursor: 'pointer',
-            transition: 'transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1), box-shadow 0.35s ease, border-color 0.25s ease',
             display: 'flex',
             flexDirection: 'column',
             justifyContent: 'space-between',
             minHeight: isProjecao ? '184px' : '144px',
             position: 'relative',
-            zIndex: isHovered ? 30 : 1,
-            transform: isHovered
-              ? (isProjecao ? 'translateY(-4px) scale(1.025)' : 'translateY(-3px) scale(1.015)')
-              : 'none',
-            boxShadow: isHovered
-              ? (isProjecao
-                  ? '0 14px 32px rgba(0,0,0,0.75), 0 0 0 1px rgba(245,221,144,0.35)'
-                  : '0 10px 24px rgba(0,0,0,0.5)')
-              : 'none',
           };
 
           return (
@@ -599,8 +582,7 @@ export default function Dashboard({ regras, polos, poloLabels, corPolo, tarefas,
               key={base.codigo}
               className="polo-card"
               onClick={() => handleClickPolo(base)}
-              onMouseEnter={() => setHoveredPolo(base.codigo)}
-              onMouseLeave={() => setHoveredPolo(null)}
+
               title={isProjecao ? `Clique para abrir o gráfico detalhado de projeção (${poloLabels[base.codigo] || base.codigo})` : `Clique para detalhar tarefas de ${poloLabels[base.codigo] || base.codigo}`}
               style={cardStyle}
             >
@@ -650,15 +632,15 @@ export default function Dashboard({ regras, polos, poloLabels, corPolo, tarefas,
                 </div>
 
                 {criterio === 'projecao_atendimento' ? (
-                  <InfograficoProjecao dadosMM={base.dadosMM} isHovered={isHovered} />
+                  <InfograficoProjecao dadosMM={base.dadosMM} />
                 ) : criterio === 'faturamento' ? (
                   <div style={{ marginTop: '10px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '9.5px', marginBottom: '4px' }}>
                       <span style={{ color: '#5fc9a8', fontWeight: 600 }}>
-                        ● Rec: R$ {base.totalRecebidoAsaas.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} ({base.adimplentesCount})
+                        ● Adimp: R$ {base.totalCobrancaAdimplente.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} ({base.adimplentesCount})
                       </span>
                       <span style={{ color: '#e0796f', fontWeight: 600 }}>
-                        ● Inad: R$ {base.totalInadimplente.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} ({base.inadimplentesCount})
+                        ● Inad: R$ {base.totalCobrancaInadimplente.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} ({base.inadimplentesCount})
                       </span>
                     </div>
                     <div style={s('height:5px;background:rgba(224,121,111,0.3);border-radius:99px;overflow:hidden;display:flex;')}>
