@@ -23,14 +23,16 @@ import {
   excluirPermissao,
 } from './services/equipeCobrancaApi.js';
 import { obterUsuarioAtual } from './services/bitrixSdk.js';
-import { montarLinkTarefaBitrix } from './services/bitrixLink.js';
+import { montarLinkTarefaBitrix, montarCaminhoTarefaBitrix } from './services/bitrixLink.js';
 import {
   MOCK_POLOS,
   MOCK_REGRAS,
   MOCK_TAREFAS,
   ADMINS_PERMISSOES,
   MOCK_COLABORADORES_ANDAMENTO,
+  resolverCobradorEAdvogado,
 } from './mockData.js';
+import { normalizarTarefas } from './utils/roteamentoEquipes.js';
 
 const SCREENS_ORDER = ['dashboard', 'colaboradores', 'tarefas', 'permissoes', 'configuracoes'];
 const FORM_VAZIO = { nome: '', polo: '', eh48h: false, digitosCpf: [], advogado: '', departamento: '', sugestoesVisiveis: false };
@@ -51,7 +53,8 @@ export default function App() {
 
   const [regras, setRegras] = useState(MOCK_REGRAS);
   const [polos, setPolos] = useState(MOCK_POLOS);
-  const [tarefas, setTarefas] = useState(MOCK_TAREFAS);
+  const [tarefas, setTarefas] = useState([]);
+  const [carregando, setCarregando] = useState(true);
   const [buscaColab, setBuscaColab] = useState('');
   const [filtroPolo, setFiltroPolo] = useState('todos');
 
@@ -129,25 +132,44 @@ export default function App() {
 
   useEffect(() => {
     let cancelado = false;
-    obterUsuarioAtual().then(async (atual) => {
-      if (cancelado) return;
-      setUsuario(atual);
-      await carregarEquipe(atual);
-      if (cancelado) return;
-      buscarTarefasEquipeCobranca(atual).then((t) => {
-        if (!cancelado && Array.isArray(t) && t.length > 0) {
-          setTarefas(t);
+    setCarregando(true);
+
+    async function carregarTudo() {
+      try {
+        const atual = await obterUsuarioAtual();
+        if (cancelado) return;
+        setUsuario(atual);
+        await carregarEquipe(atual);
+        if (cancelado) return;
+
+        const t = await buscarTarefasEquipeCobranca(atual);
+        if (cancelado) return;
+
+        if (Array.isArray(t) && t.length > 0) {
+          const tarefasResolvidas = normalizarTarefas(t, MOCK_REGRAS);
+          setTarefas(tarefasResolvidas);
+        } else {
+          setTarefas(normalizarTarefas(MOCK_TAREFAS, MOCK_REGRAS));
         }
-      });
-      const efetivas = await buscarPermissoesEfetivas(atual);
-      // Editar (criar/editar/excluir linha) é restrito a quem tem
-      // visibilidadeTotal (Caio Marques, Handerson Sales, Vagner Rodrigues e
-      // Lorena Pontes) — não ao toggle 'colaboradores' da matriz de
-      // permissões, que só libera VER a tela. Mesma regra do backend, ver
-      // exigirEdicaoEquipeCobranca em auth.ts.
-      if (!cancelado) setPodeEditar(Boolean(efetivas?.visibilidadeTotal));
-    });
-    return () => { cancelado = true; };
+
+        const efetivas = await buscarPermissoesEfetivas(atual);
+        if (!cancelado) setPodeEditar(Boolean(efetivas?.visibilidadeTotal));
+      } catch (err) {
+        console.warn('Falha no carregamento inicial:', err);
+        if (!cancelado) {
+          setTarefas(normalizarTarefas(MOCK_TAREFAS, MOCK_REGRAS));
+        }
+      } finally {
+        if (!cancelado) {
+          setCarregando(false);
+        }
+      }
+    }
+
+    carregarTudo();
+    return () => {
+      cancelado = true;
+    };
   }, [carregarEquipe]);
 
   useEffect(() => () => clearTimeout(toastTimer.current), []);
@@ -160,19 +182,48 @@ export default function App() {
 
   function abrirTarefaNoBitrix(tarefa) {
     const link = montarLinkTarefaBitrix(tarefa);
-    if (link) {
-      // Quando embutido no Bitrix (iframe do app), navega a aba de verdade do
-      // portal — window.location aqui dentro só trocaria o conteúdo do iframe.
-      const alvo = window.top || window;
-      try {
-        alvo.location.href = link;
-      } catch {
-        // Cross-origin bloqueado (portal com domínio diferente do esperado):
-        // window.top existe mas não é acessível — cai para a janela atual.
-        window.location.href = link;
-      }
-    } else {
+    if (!link) {
       mostrarToast('Esta tarefa não tem link do Bitrix disponível.');
+      return;
+    }
+
+    const caminho = montarCaminhoTarefaBitrix(tarefa);
+
+    // 1. Se estiver dentro do Bitrix24 e o SidePanel (gaveta lateral) estiver disponível,
+    // abre a tarefa diretamente no slider sobre a página atual (mesma aba):
+    try {
+      if (window.top && window.top.BX && window.top.BX.SidePanel && window.top.BX.SidePanel.Instance) {
+        window.top.BX.SidePanel.Instance.open(caminho || link);
+        return;
+      }
+    } catch {
+      // Ignora erro cross-origin se houver
+    }
+
+    try {
+      if (window.BX && window.BX.SidePanel && window.BX.SidePanel.Instance) {
+        window.BX.SidePanel.Instance.open(caminho || link);
+        return;
+      }
+    } catch {
+      // Ignora erro
+    }
+
+    // 2. Navega a janela principal (top) na MESMA aba do navegador (sem abrir nova aba):
+    try {
+      if (window.top && window.top !== window) {
+        window.top.location.href = link;
+        return;
+      }
+    } catch {
+      // Se política de sandbox bloquear
+    }
+
+    // 3. Fallback para navegação na mesma aba:
+    try {
+      window.location.assign(link);
+    } catch {
+      window.location.href = link;
     }
   }
 
@@ -265,6 +316,34 @@ export default function App() {
     mostrarToast('Polo de ' + salvo.colaboradorNome + ' atualizado para ' + (poloLabels[salvo.polo] || salvo.polo) + '.');
   }
 
+  if (carregando) {
+    return (
+      <div
+        style={s(
+          "display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:100vh;background:#000000;color:#ECE6D8;font-family:'Fira Code',ui-monospace,monospace;padding:24px;"
+        )}
+      >
+        <div
+          style={{
+            width: '52px',
+            height: '52px',
+            borderRadius: '50%',
+            border: '3.5px solid rgba(245, 221, 144, 0.12)',
+            borderTopColor: '#f5dd90',
+            animation: 'spin 0.8s linear infinite',
+            marginBottom: '20px',
+          }}
+        />
+        <div style={{ fontSize: '15px', fontWeight: 700, color: '#ECE6D8', letterSpacing: '0.02em' }}>
+          Carregando Andamento Processual...
+        </div>
+        <div style={{ fontSize: '12.5px', color: 'rgba(236,230,216,0.45)', marginTop: '8px' }}>
+          Sincronizando tarefas e roteamento por equipes regionais
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div style={s("display:flex;min-height:100vh;background:#000000;color:#ECE6D8;font-family:'Fira Code',ui-monospace,monospace;")}>
       <Sidebar
@@ -308,7 +387,7 @@ export default function App() {
             {screen === 'colaboradores' && (
               <Colaboradores
                 regras={regras}
-                polos={codigosPolo}
+                polos={polos}
                 poloLabels={poloLabels}
                 corPolo={corPolo}
                 podeEditar={podeEditar}
@@ -392,7 +471,13 @@ export default function App() {
       )}
 
       {poloModal && (
-        <ModalPolo polo={poloModal} poloLabels={poloLabels} tarefas={tarefas} onFechar={() => setPoloModal(null)} />
+        <ModalPolo
+          polo={poloModal}
+          poloLabels={poloLabels}
+          tarefas={tarefas}
+          onAbrirBitrix={abrirTarefaNoBitrix}
+          onFechar={() => setPoloModal(null)}
+        />
       )}
 
       {picker && <PickerUsuarios modo={picker} onSelecionar={selecionarDoPicker} onFechar={() => setPicker(null)} />}

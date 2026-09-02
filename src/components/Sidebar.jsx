@@ -6,7 +6,7 @@ import { iniciais } from '../data.js';
 
 const ITENS = [
   { key: 'dashboard', label: 'Painel Geral', Icon: IconDash },
-  { key: 'colaboradores', label: 'Colaboradores & Advogados', Icon: IconUsers },
+  { key: 'colaboradores', label: 'Cobradores & Advogados', Icon: IconUsers },
   { key: 'tarefas', label: 'Andamento Processual', Icon: IconClipboard },
   { key: 'permissoes', label: 'Permissões', Icon: IconShield, apenasAdmin: true },
   { key: 'configuracoes', label: 'Configurações', Icon: IconSettings },

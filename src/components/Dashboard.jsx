@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { s } from '../style.js';
 import { IconTrophy } from './Icons.jsx';
+import { identificarPoloDaTarefa } from '../utils/roteamentoEquipes.js';
 
 const CARD = 'background:rgba(255,255,255,0.02);border:1px solid rgba(199,199,199,0.12);border-radius:9px;padding:12px 14px;';
 const CARD_LABEL = 'font-size:11px;color:rgba(236,230,216,0.5);';
@@ -23,13 +24,39 @@ export default function Dashboard({ regras, polos, poloLabels, corPolo, tarefas,
 
   const porPolo = useMemo(() => {
     return polos.map((p) => {
-      const doPolo = tarefas.filter((t) => t.poloCobranca === p.codigo);
+      const membrosDoPolo = regras.filter((r) => r.polo === p.codigo);
+      const nomesCobradores = new Set(
+        membrosDoPolo.map((r) => (r.colaboradorNome || '').toLowerCase().trim()).filter(Boolean)
+      );
+      const nomesAdvogados = new Set(
+        membrosDoPolo.map((r) => (r.advogado || '').toLowerCase().trim()).filter(Boolean)
+      );
+
+      // Pessoas que atendem tal polo entram na métrica deste polo com suas tarefas
+      const doPolo = tarefas.filter((t) => {
+        // 1. Diretamente pelo código do polo
+        if (t.poloCobranca === p.codigo) return true;
+
+        // 2. Pelo mapeamento de estado/UF da tarefa para este polo
+        const poloIdentificado = identificarPoloDaTarefa(t, regras);
+        if (poloIdentificado === p.codigo) return true;
+
+        // 3. Pelas pessoas que atendem este polo (Cobrador ou Advogado)
+        const cob = (t.equipeCobrancaColaboradorNome || t.colaboradorNome || t.responsavelNome || '').toLowerCase().trim();
+        const adv = (t.equipeCobrancaAdvogado || t.advogado || '').toLowerCase().trim();
+        if (cob && nomesCobradores.has(cob)) return true;
+        if (adv && nomesAdvogados.has(adv)) return true;
+
+        return false;
+      });
+
       const atrasadas = doPolo.filter((t) => t.situacaoPrazo === 'atrasada').length;
       return {
         codigo: p.codigo,
         total: doPolo.length,
         taxaAtraso: doPolo.length > 0 ? (atrasadas / doPolo.length) * 100 : 0,
-        membros: regras.filter((r) => r.polo === p.codigo).length,
+        membros: membrosDoPolo.length,
+        tarefas: doPolo,
       };
     });
   }, [polos, tarefas, regras]);
@@ -65,17 +92,17 @@ export default function Dashboard({ regras, polos, poloLabels, corPolo, tarefas,
   };
 
   const handleClickPolo = (base) => {
-    const doPolo = tarefas.filter((t) => t.poloCobranca === base.codigo);
+    const doPolo = base.tarefas || tarefas.filter((t) => t.poloCobranca === base.codigo);
     if (onAbrirMetrica) {
       onAbrirMetrica({
         titulo: `Tarefas — ${poloLabels[base.codigo] || base.codigo}`,
-        subtitulo: `Polo Regional com ${base.membros} membros vinculados`,
+        subtitulo: `Polo Regional com ${base.membros} membros vinculados (${base.total} tarefas)`,
         tarefas: doPolo,
         cor: corPolo[base.codigo] || '#5b9bdb',
         polo: base.codigo,
       });
     } else if (onAbrirPolo) {
-      onAbrirPolo(base.codigo);
+      onAbrirPolo(base.codigo, doPolo);
     }
   };
 

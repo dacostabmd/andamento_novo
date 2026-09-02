@@ -9,6 +9,7 @@ select option { background: #161616; color: #ECE6D8; }
 @keyframes toastIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes sidebarSlide { from { opacity: 0; transform: translateY(-18px); } to { opacity: 1; transform: translateY(0); } }
 @keyframes fadeSlideIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
 
 .nav-item:hover { background: rgba(245,221,144,0.06); }
 .btn-gold:hover { background: #f5dd90; color: #241a04; border-color: #f5dd90; }
