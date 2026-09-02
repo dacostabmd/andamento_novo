@@ -131,6 +131,7 @@ export async function excluirPermissao(usuarioId, solicitante) {
 export async function buscarTarefasEquipeCobranca(solicitante) {
   const params = paramsSolicitante(solicitante)
   if (solicitante?.id != null) params.set('escopoEquipeCobranca', '1')
+  params.set('full', 'true')
   const query = params.toString() ? `?${params.toString()}` : ''
   const dados = await chamar(`/snapshot${query}`)
   return Array.isArray(dados?.tarefas) ? dados.tarefas : []

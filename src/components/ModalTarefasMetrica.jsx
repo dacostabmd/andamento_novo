@@ -31,6 +31,7 @@ export default function ModalTarefasMetrica({
   corDestaque = '#5b9bdb',
   polo = null,
   regras = [],
+  criterio = null,
   onAbrirBitrix,
   onFechar,
 }) {
@@ -39,6 +40,7 @@ export default function ModalTarefasMetrica({
   const [ordemColuna, setOrdemColuna] = useState('cliente');
   const [ordemDirecao, setOrdemDirecao] = useState('asc'); // 'asc' | 'desc'
   const [filtroEquipeId, setFiltroEquipeId] = useState('todas');
+  const [colaboradorSelecionado, setColaboradorSelecionado] = useState(null); // { nome: string, tipo: 'cobrador' | 'advogado' } | null
 
   // Identifica o código do polo deste modal
   const poloAtual = useMemo(() => {
@@ -107,6 +109,91 @@ export default function ModalTarefasMetrica({
   );
   const temMultiplosPolos = polosDistintos.size > 1;
 
+  // Quando em modo Faturamento, calcula o ranking dos colaboradores (cobradores e advogados) que mais faturaram
+  const rankingFinanceiro = useMemo(() => {
+    if (criterio !== 'faturamento') return null;
+
+    const mapaCobradores = new Map();
+    const mapaAdvogados = new Map();
+
+    for (const t of tarefas) {
+      const valor = (typeof t.valorCobranca === 'number' && !isNaN(t.valorCobranca) && t.valorCobranca > 0)
+        ? t.valorCobranca
+        : ((typeof t.valorRecebidoAsaas === 'number' ? t.valorRecebidoAsaas : 0) + (typeof t.valorInadimplente === 'number' ? t.valorInadimplente : 0));
+
+      const recebido = typeof t.valorRecebidoAsaas === 'number' && !isNaN(t.valorRecebidoAsaas) ? t.valorRecebidoAsaas : 0;
+      const inadimplente = typeof t.valorInadimplente === 'number' && !isNaN(t.valorInadimplente) ? t.valorInadimplente : 0;
+      const sit = (t.situacaoFinanceira || '').toUpperCase();
+      const isAdimplente = sit === 'ADIMPLENTE';
+      const isInadimplente = sit === 'INADIMPLENTE';
+
+      // 1. Cobrador
+      const cobNome = t.equipeCobrancaColaboradorNome || t.colaboradorNome || t.responsavelNome;
+      if (cobNome && cobNome !== '—' && cobNome !== 'Cobrador não definido') {
+        if (!mapaCobradores.has(cobNome)) {
+          mapaCobradores.set(cobNome, {
+            nome: cobNome,
+            tipo: 'cobrador',
+            totalFaturamento: 0,
+            totalRecebido: 0,
+            totalInadimplente: 0,
+            adimplentesCount: 0,
+            inadimplentesCount: 0,
+            tarefasCount: 0,
+          });
+        }
+        const c = mapaCobradores.get(cobNome);
+        c.totalFaturamento += valor;
+        c.totalRecebido += recebido;
+        c.totalInadimplente += inadimplente;
+        if (isAdimplente) c.adimplentesCount++;
+        if (isInadimplente) c.inadimplentesCount++;
+        c.tarefasCount++;
+      }
+
+      // 2. Advogado
+      const advNome = t.equipeCobrancaAdvogado || t.advogado;
+      if (advNome && advNome !== 'Sem advogado' && advNome !== '—') {
+        if (!mapaAdvogados.has(advNome)) {
+          mapaAdvogados.set(advNome, {
+            nome: advNome,
+            tipo: 'advogado',
+            totalFaturamento: 0,
+            totalRecebido: 0,
+            totalInadimplente: 0,
+            adimplentesCount: 0,
+            inadimplentesCount: 0,
+            tarefasCount: 0,
+          });
+        }
+        const a = mapaAdvogados.get(advNome);
+        a.totalFaturamento += valor;
+        a.totalRecebido += recebido;
+        a.totalInadimplente += inadimplente;
+        if (isAdimplente) a.adimplentesCount++;
+        if (isInadimplente) a.inadimplentesCount++;
+        a.tarefasCount++;
+      }
+    }
+
+    function prepararLista(mapa) {
+      return Array.from(mapa.values())
+        .map((item) => {
+          const somaAsaas = item.totalRecebido + item.totalInadimplente;
+          const taxa = somaAsaas > 0
+            ? (item.totalRecebido / somaAsaas) * 100
+            : ((item.adimplentesCount + item.inadimplentesCount) > 0 ? (item.adimplentesCount / (item.adimplentesCount + item.inadimplentesCount)) * 100 : 100);
+          return { ...item, taxaAdimplencia: taxa };
+        })
+        .sort((a, b) => (b.totalFaturamento - a.totalFaturamento) || (b.totalRecebido - a.totalRecebido) || (b.tarefasCount - a.tarefasCount));
+    }
+
+    return {
+      cobradores: prepararLista(mapaCobradores),
+      advogados: prepararLista(mapaAdvogados),
+    };
+  }, [criterio, tarefas]);
+
   const colunasOrdenacaoDisponiveis = useMemo(() => {
     return COLUNAS_ORDENACAO.filter((col) => {
       // Se todas as tarefas são do mesmo polo/estado, ordenar por polo é redundante
@@ -159,6 +246,20 @@ export default function ModalTarefasMetrica({
 
   const tarefasFiltradas = useMemo(() => {
     let filtradas = tarefas;
+
+    // Filtro por Colaborador selecionado no Ranking de Faturamento
+    if (colaboradorSelecionado) {
+      filtradas = filtradas.filter((t) => {
+        if (colaboradorSelecionado.tipo === 'cobrador') {
+          const cobT = (t.equipeCobrancaColaboradorNome || t.colaboradorNome || t.responsavelNome || '').toLowerCase().trim();
+          return cobT.includes(colaboradorSelecionado.nome.toLowerCase().trim());
+        } else if (colaboradorSelecionado.tipo === 'advogado') {
+          const advT = (t.equipeCobrancaAdvogado || t.advogado || '').toLowerCase().trim();
+          return advT.includes(colaboradorSelecionado.nome.toLowerCase().trim());
+        }
+        return true;
+      });
+    }
 
     // 1. Filtro por Equipe (select do modal)
     if (filtroEquipeId !== 'todas') {
@@ -375,6 +476,201 @@ export default function ModalTarefasMetrica({
             <IconX size={18} />
           </button>
         </div>
+
+{/* ─── RANKING DE FATURAMENTO POR COLABORADOR (MODO FATURAMENTO) ─── */}
+        {criterio === 'faturamento' && rankingFinanceiro && (
+          <div style={{ padding: '0 20px 10px 20px', flexShrink: 0 }}>
+            <div
+              style={{
+                background: 'linear-gradient(135deg, rgba(245,221,144,0.06) 0%, rgba(20,20,20,0.85) 100%)',
+                border: '1px solid rgba(245,221,144,0.22)',
+                borderRadius: '12px',
+                padding: '12px 14px',
+                marginBottom: '8px',
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ fontSize: '15px' }}>💰</span>
+                  <span style={{ fontSize: '13px', fontWeight: 800, color: '#f5dd90', letterSpacing: '-0.01em' }}>
+                    Colaboradores que Mais Faturaram
+                  </span>
+                  <span style={{ fontSize: '11px', color: 'rgba(236,230,216,0.45)' }}>
+                    (Cobrança Bitrix & Asaas)
+                  </span>
+                </div>
+                {colaboradorSelecionado && (
+                  <button
+                    type="button"
+                    onClick={() => { setColaboradorSelecionado(null); setPagina(1); }}
+                    style={{
+                      background: 'rgba(224,121,111,0.18)',
+                      border: '1px solid rgba(224,121,111,0.4)',
+                      color: '#e0796f',
+                      borderRadius: '6px',
+                      padding: '3px 9px',
+                      fontSize: '11px',
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      display: 'inline-flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                    }}
+                  >
+                    <span>Filtrando: <strong>{colaboradorSelecionado.nome}</strong></span>
+                    <span>✕</span>
+                  </button>
+                )}
+              </div>
+
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                {/* Coluna 1: Cobradores */}
+                <div
+                  style={{
+                    background: 'rgba(0,0,0,0.3)',
+                    border: '1px solid rgba(199,199,199,0.1)',
+                    borderRadius: '8px',
+                    padding: '8px 10px',
+                  }}
+                >
+                  <div style={{ fontSize: '11.5px', fontWeight: 700, color: '#ECE6D8', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                    <span>💼</span>
+                    <span>Top Cobradores</span>
+                    <span style={{ fontSize: '10px', color: 'rgba(236,230,216,0.45)', marginLeft: 'auto' }}>
+                      {rankingFinanceiro.cobradores.length} no polo
+                    </span>
+                  </div>
+                  {rankingFinanceiro.cobradores.length === 0 ? (
+                    <div style={{ fontSize: '11px', color: 'rgba(236,230,216,0.4)', padding: '6px 0' }}>
+                      Nenhum cobrador com tarefas neste polo.
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', maxHeight: '140px', overflowY: 'auto' }}>
+                      {rankingFinanceiro.cobradores.slice(0, 5).map((cob, idx) => {
+                        const isSelected = colaboradorSelecionado?.tipo === 'cobrador' && colaboradorSelecionado?.nome === cob.nome;
+                        const medalha = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `${idx + 1}º`;
+                        return (
+                          <div
+                            key={cob.nome}
+                            onClick={() => {
+                              if (isSelected) setColaboradorSelecionado(null);
+                              else setColaboradorSelecionado({ nome: cob.nome, tipo: 'cobrador' });
+                              setPagina(1);
+                            }}
+                            title="Clique para filtrar tarefas deste cobrador"
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              padding: '5px 8px',
+                              borderRadius: '6px',
+                              background: isSelected ? 'rgba(245,221,144,0.18)' : 'rgba(255,255,255,0.03)',
+                              border: isSelected ? '1px solid #f5dd90' : '1px solid rgba(199,199,199,0.08)',
+                              cursor: 'pointer',
+                              transition: 'all 0.15s ease',
+                            }}
+                          >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0 }}>
+                              <span style={{ fontSize: '11px', fontWeight: 800, width: '18px', textAlign: 'center' }}>
+                                {medalha}
+                              </span>
+                              <span style={{ fontSize: '11.5px', fontWeight: 700, color: isSelected ? '#f5dd90' : '#ECE6D8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {cob.nome}
+                              </span>
+                              <span style={{ fontSize: '10px', color: 'rgba(236,230,216,0.45)', flexShrink: 0 }}>
+                                ({cob.tarefasCount} {cob.tarefasCount === 1 ? 'tar' : 'tars'})
+                              </span>
+                            </div>
+                            <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                              <div style={{ fontSize: '11.5px', fontWeight: 800, color: '#f5dd90' }}>
+                                R$ {cob.totalFaturamento.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                              </div>
+                              <div style={{ fontSize: '9.5px', color: cob.taxaAdimplencia >= 70 ? '#5fc9a8' : 'rgba(236,230,216,0.5)' }}>
+                                {cob.taxaAdimplencia.toFixed(0)}% adimp.
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {/* Coluna 2: Advogados */}
+                <div
+                  style={{
+                    background: 'rgba(0,0,0,0.3)',
+                    border: '1px solid rgba(199,199,199,0.1)',
+                    borderRadius: '8px',
+                    padding: '8px 10px',
+                  }}
+                >
+                  <div style={{ fontSize: '11.5px', fontWeight: 700, color: '#ECE6D8', marginBottom: '6px', display: 'flex', alignItems: 'center', gap: '5px' }}>
+                    <span>⚖️</span>
+                    <span>Top Advogados</span>
+                    <span style={{ fontSize: '10px', color: 'rgba(236,230,216,0.45)', marginLeft: 'auto' }}>
+                      {rankingFinanceiro.advogados.length} no polo
+                    </span>
+                  </div>
+                  {rankingFinanceiro.advogados.length === 0 ? (
+                    <div style={{ fontSize: '11px', color: 'rgba(236,230,216,0.4)', padding: '6px 0' }}>
+                      Nenhum advogado com tarefas neste polo.
+                    </div>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '5px', maxHeight: '140px', overflowY: 'auto' }}>
+                      {rankingFinanceiro.advogados.slice(0, 5).map((adv, idx) => {
+                        const isSelected = colaboradorSelecionado?.tipo === 'advogado' && colaboradorSelecionado?.nome === adv.nome;
+                        const medalha = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `${idx + 1}º`;
+                        return (
+                          <div
+                            key={adv.nome}
+                            onClick={() => {
+                              if (isSelected) setColaboradorSelecionado(null);
+                              else setColaboradorSelecionado({ nome: adv.nome, tipo: 'advogado' });
+                              setPagina(1);
+                            }}
+                            title="Clique para filtrar tarefas deste advogado"
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              justifyContent: 'space-between',
+                              padding: '5px 8px',
+                              borderRadius: '6px',
+                              background: isSelected ? 'rgba(245,221,144,0.18)' : 'rgba(255,255,255,0.03)',
+                              border: isSelected ? '1px solid #f5dd90' : '1px solid rgba(199,199,199,0.08)',
+                              cursor: 'pointer',
+                              transition: 'all 0.15s ease',
+                            }}
+                          >
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0 }}>
+                              <span style={{ fontSize: '11px', fontWeight: 800, width: '18px', textAlign: 'center' }}>
+                                {medalha}
+                              </span>
+                              <span style={{ fontSize: '11.5px', fontWeight: 700, color: isSelected ? '#f5dd90' : '#ECE6D8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                                {adv.nome}
+                              </span>
+                              <span style={{ fontSize: '10px', color: 'rgba(236,230,216,0.45)', flexShrink: 0 }}>
+                                ({adv.tarefasCount} {adv.tarefasCount === 1 ? 'tar' : 'tars'})
+                              </span>
+                            </div>
+                            <div style={{ textAlign: 'right', flexShrink: 0 }}>
+                              <div style={{ fontSize: '11.5px', fontWeight: 800, color: '#f5dd90' }}>
+                                R$ {adv.totalFaturamento.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
+                              </div>
+                              <div style={{ fontSize: '9.5px', color: adv.taxaAdimplencia >= 70 ? '#5fc9a8' : 'rgba(236,230,216,0.5)' }}>
+                                {adv.taxaAdimplencia.toFixed(0)}% adimp.
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Barra de Busca e Filtro por Equipe/CPF */}
         <div style={{ padding: '12px 20px 8px 20px', flexShrink: 0 }}>

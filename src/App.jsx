@@ -470,6 +470,7 @@ export default function App() {
           corDestaque={modalMetrica.cor || '#5b9bdb'}
           polo={modalMetrica.polo}
           regras={regras}
+          criterio={modalMetrica.criterio}
           onAbrirBitrix={abrirTarefaNoBitrix}
           onFechar={() => setModalMetrica(null)}
         />
