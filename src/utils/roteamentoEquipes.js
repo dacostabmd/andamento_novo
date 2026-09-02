@@ -150,6 +150,40 @@ export function criarIndiceRegras(regras = MOCK_REGRAS) {
 }
 
 /**
+ * Sufixos operacionais comuns do Bitrix que identificam tipo de processo
+ * mas não diferenciam o cliente.
+ */
+const RE_SUFIXOS_OPERACIONAIS =
+  /\s*[-–—]?\s*(ANDAMENTO MENSAL|ANDAMENTO NEGOCIA[ÇC][ÃA]O|COBRAN[ÇC]A MENSAL|Pessoa F[íi]sica|Pessoa Jur[íi]dica|\(C[óo]pia\)|\(EXECUTADO\)|\(REU\)|\(R[ÉE]U\))\s*/gi;
+
+/**
+ * Remove prefixos estranhos comuns inseridos por operadores no Bitrix
+ * (como aspas repetidas ''''''''', barras duplas //, pontos, asteriscos, etc.)
+ */
+export function limparNomeExibicao(texto) {
+  if (!texto || typeof texto !== 'string') return texto || '';
+  const limpo = texto
+    .replace(/^['"`/\\.\-_*#~!?|:;\s]+/, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return limpo || texto;
+}
+
+/**
+ * Extrai uma chave limpa e canônica para deduplicação de nomes.
+ */
+export function extrairChaveNomeDeduplicacao(tarefa) {
+  if (!tarefa) return '';
+  const base = tarefa.clienteNome || tarefa.titulo || '';
+  return String(base)
+    .replace(/^['"`/\\.\-_*#~!?|:;\s]+/, '')
+    .replace(RE_SUFIXOS_OPERACIONAIS, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
+/**
  * Normaliza uma tarefa com resolução O(1) de alta performance.
  */
 export function normalizarTarefa(t, indice) {
@@ -210,8 +244,14 @@ export function normalizarTarefa(t, indice) {
     }
   }
 
+  // 4. Higieniza nomes estranhos com prefixos de operadores (//, '''''', etc.)
+  const nomeLimpo = limparNomeExibicao(t.clienteNome || t.titulo);
+  const tituloLimpo = limparNomeExibicao(t.titulo);
+
   return {
     ...t,
+    clienteNome: nomeLimpo,
+    titulo: tituloLimpo,
     poloCobranca: polo || null,
     digitoCpfCliente: digito !== null ? digito : t.digitoCpfCliente,
     equipeCobrancaColaboradorNome: cobrador || '—',
@@ -220,16 +260,60 @@ export function normalizarTarefa(t, indice) {
 }
 
 /**
- * Normaliza um lote inteiro de tarefas (ex.: 85.000 tarefas em ~15ms).
+ * Normaliza um lote inteiro de tarefas e aplica a regra de deduplicação:
+ * "Tarefas com o mesmo nome só devem aparecer nas listas caso sejam de grupos de tarefas diferentes"
  */
 export function normalizarTarefas(tarefas, regras = MOCK_REGRAS) {
   if (!Array.isArray(tarefas)) return [];
   const indice = criarIndiceRegras(regras);
-  const resultado = new Array(tarefas.length);
+
+  // Mapa para deduplicação: chave = grupoId::nomeCanonico
+  const mapaPorGrupoENome = new Map();
+
   for (let i = 0; i < tarefas.length; i++) {
-    resultado[i] = normalizarTarefa(tarefas[i], indice);
+    const raw = tarefas[i];
+    if (!raw) continue;
+
+    const normalizada = normalizarTarefa(raw, indice);
+    const chaveNome = extrairChaveNomeDeduplicacao(normalizada);
+
+    // Se a tarefa não tiver nome identificável, mantém
+    if (!chaveNome) {
+      mapaPorGrupoENome.set(`sem_nome_${normalizada.id || i}`, normalizada);
+      continue;
+    }
+
+    // Grupo de trabalho (projetoId / groupId)
+    const grupoId = normalizada.projetoId != null ? String(normalizada.projetoId) : 'sem_grupo';
+    const chaveUnica = `${grupoId}:::${chaveNome}`;
+
+    const existente = mapaPorGrupoENome.get(chaveUnica);
+    if (!existente) {
+      mapaPorGrupoENome.set(chaveUnica, normalizada);
+      continue;
+    }
+
+    // Se já existe uma tarefa com o MESMO NOME no MESMO GRUPO:
+    // Decide qual manter (prioriza a mais recente ou com status ativo sobre concluída redundante)
+    const exEhConcluida = existente.situacaoPrazo === 'concluida' || existente.status === 5;
+    const novaEhConcluida = normalizada.situacaoPrazo === 'concluida' || normalizada.status === 5;
+
+    if (exEhConcluida && !novaEhConcluida) {
+      // Nova está ativa (no prazo/atrasada), substitui a concluída antiga
+      mapaPorGrupoENome.set(chaveUnica, normalizada);
+    } else if (!exEhConcluida && novaEhConcluida) {
+      // Mantém a existente ativa
+    } else {
+      // Ambos mesmo status: mantém a de maior ID ou data mais recente
+      const idAtual = Number(normalizada.id) || 0;
+      const idExistente = Number(existente.id) || 0;
+      if (idAtual > idExistente) {
+        mapaPorGrupoENome.set(chaveUnica, normalizada);
+      }
+    }
   }
-  return resultado;
+
+  return Array.from(mapaPorGrupoENome.values());
 }
 
 /**
