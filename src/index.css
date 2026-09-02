@@ -21,3 +21,23 @@ select option { background: #161616; color: #ECE6D8; }
 .picker-item:hover { border-color: #f5dd90; background: rgba(245,221,144,0.06); }
 .close-btn:hover { color: #f5dd90; }
 .rm-btn:hover { color: #e0796f; }
+.metric-card { cursor: pointer; transition: background 0.2s ease, border-color 0.2s ease; }
+.metric-card:hover { background: rgba(255, 255, 255, 0.055) !important; }
+
+@keyframes overlayFadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes modalFadeIn {
+  from { opacity: 0; transform: scale(0.96) translateY(12px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+
+.modal-overlay {
+  animation: overlayFadeIn 0.22s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.modal-content {
+  animation: modalFadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
+}

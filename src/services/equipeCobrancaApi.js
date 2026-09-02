@@ -72,6 +72,20 @@ export async function salvarLinhaEquipe(input, id) {
   return dados?.equipe ?? null
 }
 
+/**
+ * Autoedição do PRÓPRIO polo ("UF de atuação"), pela aba Configurações — não
+ * passa pelo CRUD completo (Colaboradores), restrito aos 4 admins. Só troca
+ * `polo`; o backend confere que quem chama é dono da linha (colaboradorId ou
+ * advogadoId bate com o solicitante) ou um dos admins.
+ */
+export async function alterarPoloProprio(id, polo, solicitante) {
+  const dados = await chamar(`/equipe-cobranca/${id}/polo`, {
+    method: 'PUT',
+    body: JSON.stringify({ polo, solicitanteId: solicitante?.id ?? null, solicitanteNome: solicitante?.nome ?? null }),
+  })
+  return dados?.equipe ?? null
+}
+
 export async function excluirLinhaEquipe(id, solicitante) {
   const params = paramsSolicitante(solicitante)
   const query = params.toString() ? `?${params.toString()}` : ''

@@ -22,12 +22,33 @@ export default function ModalColaborador({ form, setForm, editando, erroNome, on
   const sugestoes = buscaNome ? usuarios.filter((u) => u.nome.toLowerCase().includes(buscaNome)).slice(0, 6) : [];
   const mostrarSugestoes = form.sugestoesVisiveis && sugestoes.length > 0;
 
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        onCancelar();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown, true);
+    return () => window.removeEventListener('keydown', handleKeyDown, true);
+  }, [onCancelar]);
+
   return (
-    <div style={s('position:fixed;inset:0;background:rgba(0,0,0,0.65);display:flex;align-items:center;justify-content:center;z-index:50;padding:20px;')}>
-      <div style={s('background:#111111;border:1px solid rgba(199,199,199,0.2);border-radius:14px;width:460px;max-height:90vh;overflow-y:auto;padding:24px;')}>
+    <div
+      className="modal-overlay"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onCancelar();
+      }}
+      style={s('position:fixed;inset:0;background:rgba(0,0,0,0.65);display:flex;align-items:center;justify-content:center;z-index:50;padding:20px;backdrop-filter:blur(4px);')}
+    >
+      <div
+        className="modal-content"
+        style={s('background:#111111;border:1px solid rgba(199,199,199,0.2);border-radius:14px;width:460px;max-height:90vh;overflow-y:auto;padding:24px;')}
+      >
         <div style={s('display:flex;justify-content:space-between;align-items:center;margin-bottom:18px;')}>
           <span style={s('font-size:16px;font-weight:700;')}>{editando ? 'Editar Cobrador' : 'Novo Cobrador'}</span>
-          <button className="close-btn" onClick={onCancelar} style={s('background:transparent;border:none;color:rgba(236,230,216,0.5);cursor:pointer;padding:4px;')}><IconX /></button>
+          <button className="close-btn" onClick={onCancelar} title="Fechar (ESC)" style={s('background:transparent;border:none;color:rgba(236,230,216,0.5);cursor:pointer;padding:4px;')}><IconX /></button>
         </div>
 
         <div style={s('display:flex;flex-direction:column;gap:16px;')}>

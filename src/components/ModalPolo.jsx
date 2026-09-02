@@ -17,6 +17,18 @@ export default function ModalPolo({ polo, poloLabels, tarefas, onFechar }) {
   const [status, setStatus] = useState('todos');
   const [pagina, setPagina] = useState(1);
 
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        onFechar();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown, true);
+    return () => window.removeEventListener('keydown', handleKeyDown, true);
+  }, [onFechar]);
+
   const buscaNorm = busca.trim().toLowerCase();
   const filtradas = tarefas.filter((t) => {
     if (t.poloCobranca !== polo) return false;
@@ -33,11 +45,20 @@ export default function ModalPolo({ polo, poloLabels, tarefas, onFechar }) {
   const lista = filtradas.slice((atual - 1) * PAGE_SIZE, (atual - 1) * PAGE_SIZE + PAGE_SIZE);
 
   return (
-    <div style={s('position:fixed;inset:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:65;padding:20px;')}>
-      <div style={s('background:#111111;border:1px solid rgba(199,199,199,0.2);border-radius:14px;width:640px;max-height:85vh;display:flex;flex-direction:column;')}>
+    <div
+      className="modal-overlay"
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onFechar();
+      }}
+      style={s('position:fixed;inset:0;background:rgba(0,0,0,0.7);display:flex;align-items:center;justify-content:center;z-index:65;padding:20px;backdrop-filter:blur(4px);')}
+    >
+      <div
+        className="modal-content"
+        style={s('background:#111111;border:1px solid rgba(199,199,199,0.2);border-radius:14px;width:640px;max-height:85vh;display:flex;flex-direction:column;')}
+      >
         <div style={s('display:flex;justify-content:space-between;align-items:center;padding:20px;')}>
           <span style={s('font-size:16px;font-weight:700;')}>Tarefas — {poloLabels[polo]}</span>
-          <button className="close-btn" onClick={onFechar} style={s('background:transparent;border:none;color:rgba(236,230,216,0.5);cursor:pointer;padding:4px;')}><IconX /></button>
+          <button className="close-btn" onClick={onFechar} title="Fechar (ESC)" style={s('background:transparent;border:none;color:rgba(236,230,216,0.5);cursor:pointer;padding:4px;')}><IconX /></button>
         </div>
         <div style={s('display:flex;gap:10px;padding:0 20px 16px;')}>
           <input type="text" placeholder="Buscar por cliente ou colaborador..." value={busca} onChange={(e) => { setBusca(e.target.value); setPagina(1); }} style={s('flex:1;background:#161616;border:1px solid rgba(199,199,199,0.25);border-radius:8px;padding:9px 12px;color:#ECE6D8;font-family:inherit;font-size:12.5px;')} />
