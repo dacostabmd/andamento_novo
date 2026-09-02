@@ -399,6 +399,8 @@ export default function App() {
                 onNovo={abrirNovo}
                 onEditar={abrirEdicao}
                 onExcluir={excluirMembro}
+                tarefas={tarefas}
+                onAbrirBitrix={abrirTarefaNoBitrix}
               />
             )}
             {screen === 'tarefas' && (

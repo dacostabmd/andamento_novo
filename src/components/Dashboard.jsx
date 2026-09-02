@@ -141,25 +141,94 @@ export default function Dashboard({ regras, polos, poloLabels, corPolo, tarefas,
         {resumo.map((r, i) => {
           const pct = r.isPct ? r.n : (tarefas.length > 0 ? (r.n / tarefas.length) * 100 : 0);
           return (
-            <div key={r.label} onClick={() => handleClickResumo(r)} style={{ flex: 1, padding: '18px 22px', borderRight: i < resumo.length - 1 ? '1px solid rgba(199,199,199,0.14)' : 'none', cursor: 'pointer' }}>
-              <div style={s('font-size:24px;font-weight:700;')}>{r.valor}</div>
-              <div style={s('font-size:11px;font-weight:700;margin-top:6px;')}>{r.label}</div>
-              <div style={s('height:4px;background:rgba(199,199,199,0.14);border-radius:99px;margin-top:12px;')}>
+            <div
+              key={r.label}
+              onClick={() => handleClickResumo(r)}
+              title={`Clique para detalhar tarefas de "${r.label}"`}
+              style={{
+                flex: 1,
+                padding: '18px 22px',
+                borderRight: i < resumo.length - 1 ? '1px solid rgba(199,199,199,0.14)' : 'none',
+                cursor: 'pointer',
+                transition: 'background 0.15s ease',
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(255,255,255,0.02)')}
+              onMouseLeave={(e) => (e.currentTarget.style.background = 'transparent')}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                <div style={s('font-size:24px;font-weight:700;')}>{Number(r.valor) ? Number(r.valor).toLocaleString('pt-BR') : r.valor}</div>
+                {!r.isPct && (
+                  <span style={{ fontSize: '13px', fontWeight: 700, color: r.cor }}>
+                    {pct.toFixed(1)}%
+                  </span>
+                )}
+              </div>
+              <div style={s('font-size:11px;font-weight:700;letter-spacing:0.03em;margin-top:6px;')}>{r.label}</div>
+              <div style={s('font-size:11px;color:rgba(236,230,216,0.45);margin-top:3px;')}>{r.desc}</div>
+              <div style={s('height:4px;background:rgba(199,199,199,0.14);border-radius:99px;margin-top:10px;overflow:hidden;')}>
                 <div style={{ height: '100%', background: r.cor, borderRadius: '99px', width: pct.toFixed(1) + '%' }} />
               </div>
             </div>
           );
         })}
       </div>
+
       {destaque && (
-        <div onClick={() => handleClickPolo(destaque)} style={s('background:#111111;border:1px solid rgba(199,199,199,0.16);border-left:4px solid #d9a83b;border-radius:12px;padding:20px 22px;margin-bottom:24px;cursor:pointer;')}>
-          <div style={s('display:flex;align-items:center;gap:14px;margin-bottom:16px;')}>
-            <div style={s('width:42px;height:42px;border-radius:12px;background:rgba(217,168,59,0.14);display:flex;align-items:center;justify-content:center;color:#d9a83b;')}>
-              <IconTrophy />
+        <div
+          onClick={() => handleClickPolo(destaque)}
+          title={`Clique para detalhar tarefas de ${poloLabels[destaque.codigo] || destaque.codigo}`}
+          style={s('background:#111111;border:1px solid rgba(199,199,199,0.16);border-left:4px solid #d9a83b;border-radius:12px;padding:20px 22px;margin-bottom:24px;cursor:pointer;transition:border-color 0.2s ease;')}
+          onMouseEnter={(e) => (e.currentTarget.style.borderColor = 'rgba(217,168,59,0.5)')}
+          onMouseLeave={(e) => (e.currentTarget.style.borderColor = 'rgba(199,199,199,0.16)')}
+        >
+          <div style={s('display:flex;justify-content:space-between;align-items:flex-start;gap:16px;flex-wrap:wrap;margin-bottom:16px;')}>
+            <div style={s('display:flex;align-items:center;gap:14px;')}>
+              <div style={s('width:42px;height:42px;border-radius:12px;background:rgba(217,168,59,0.14);display:flex;align-items:center;justify-content:center;color:#d9a83b;flex-shrink:0;')}>
+                <IconTrophy />
+              </div>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={s('font-size:11px;font-weight:700;letter-spacing:0.05em;color:#d9a83b;')}>POLO DESTAQUE</span>
+                  <span style={s('background:#d9a83b;color:#241a04;font-size:10px;font-weight:800;padding:2px 7px;border-radius:4px;letter-spacing:0.03em;')}>MENOR TAXA DE ATRASO</span>
+                </div>
+                <div style={s('font-size:18px;font-weight:700;margin-top:2px;')}>{poloLabels[destaque.codigo] || destaque.codigo}</div>
+              </div>
             </div>
-            <div>
-              <div style={s('font-size:11px;font-weight:700;letter-spacing:0.05em;color:#d9a83b;')}>POLO DESTAQUE</div>
-              <div style={s('font-size:18px;font-weight:700;')}>{poloLabels[destaque.codigo] || destaque.codigo}</div>
+            <span
+              style={{
+                backgroundColor: (corPolo[destaque.codigo] || '#5b9bdb') + '25',
+                color: corPolo[destaque.codigo] || '#5b9bdb',
+                border: '1px solid ' + (corPolo[destaque.codigo] || '#5b9bdb') + '45',
+                fontWeight: 800,
+                fontSize: '12.5px',
+                padding: '5px 12px',
+                borderRadius: '999px',
+              }}
+            >
+              {destaque.codigo.split('_').join(', ')}
+            </span>
+          </div>
+
+          <div style={s('display:grid;grid-template-columns:repeat(4,1fr);gap:12px;')}>
+            <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(199,199,199,0.12)', borderRadius: '9px', padding: '12px 14px' }}>
+              <div style={s('font-size:11px;color:rgba(236,230,216,0.5);')}>Volume de Tarefas</div>
+              <div style={s('font-size:20px;font-weight:700;color:#5b9bdb;margin-top:4px;')}>{destaque.total.toLocaleString('pt-BR')}</div>
+              <div style={s('font-size:10.5px;color:rgba(236,230,216,0.45);margin-top:2px;')}>{destaque.pctVolumeGeral.toFixed(1)}% do volume geral</div>
+            </div>
+            <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(199,199,199,0.12)', borderRadius: '9px', padding: '12px 14px' }}>
+              <div style={s('font-size:11px;color:rgba(236,230,216,0.5);')}>Taxa de Atraso</div>
+              <div style={s('font-size:20px;font-weight:700;color:#e0796f;margin-top:4px;')}>{destaque.taxaAtraso.toFixed(1)}%</div>
+              <div style={s('font-size:10.5px;color:rgba(236,230,216,0.45);margin-top:2px;')}>{destaque.atrasadas} de {destaque.total} atrasadas</div>
+            </div>
+            <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(199,199,199,0.12)', borderRadius: '9px', padding: '12px 14px' }}>
+              <div style={s('font-size:11px;color:rgba(236,230,216,0.5);')}>Concluídas / No Prazo</div>
+              <div style={s('font-size:20px;font-weight:700;color:#5fc9a8;margin-top:4px;')}>{destaque.concluidas.toLocaleString('pt-BR')}</div>
+              <div style={s('font-size:10.5px;color:rgba(236,230,216,0.45);margin-top:2px;')}>{destaque.rapidez.toFixed(1)}% de conformidade</div>
+            </div>
+            <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(199,199,199,0.12)', borderRadius: '9px', padding: '12px 14px' }}>
+              <div style={s('font-size:11px;color:rgba(236,230,216,0.5);')}>Membros Vinculados</div>
+              <div style={s('font-size:20px;font-weight:700;color:#f5dd90;margin-top:4px;')}>{destaque.membros}</div>
+              <div style={s('font-size:10.5px;color:rgba(236,230,216,0.45);margin-top:2px;')}>{destaque.pontos} pontos acumulados</div>
             </div>
           </div>
         </div>
@@ -435,9 +504,19 @@ export default function Dashboard({ regras, polos, poloLabels, corPolo, tarefas,
                         >
                           {p.codigo.split('_').join(', ')}
                         </span>
-                        <span style={{ fontWeight: 600, color: '#ECE6D8' }}>
-                          {poloLabels[p.codigo] || p.rotulo}
-                        </span>
+                        {(() => {
+                          const rotulo = poloLabels[p.codigo] || p.rotulo || '';
+                          const partes = rotulo.split(' - ');
+                          const nomeDescritivo =
+                            partes.length > 1 && partes[0] === p.codigo
+                              ? partes.slice(1).join(' - ')
+                              : null;
+                          return nomeDescritivo ? (
+                            <span style={{ fontWeight: 600, color: '#ECE6D8' }}>
+                              {nomeDescritivo}
+                            </span>
+                          ) : null;
+                        })()}
                       </div>
                     </td>
                     <td style={{ padding: '12px 16px', textAlign: 'center', color: 'rgba(236,230,216,0.7)' }}>

@@ -2,6 +2,7 @@ import React, { useState, useMemo } from 'react';
 import { s } from '../style.js';
 import { IconSearch, IconPlus, IconFire, IconScale, IconEdit, IconTrash } from './Icons.jsx';
 import { iniciais, pillStyle } from '../data.js';
+import ModalDesempenhoColaborador from './ModalDesempenhoColaborador.jsx';
 
 const TH = 'text-align:left;padding:12px 14px;font-weight:700;font-size:11.5px;color:rgba(236,230,216,0.6);border-bottom:1px solid rgba(199,199,199,0.16);';
 const INPUT = 'background:#161616;border:1px solid rgba(199,199,199,0.25);border-radius:8px;padding:10px 12px;color:#ECE6D8;font-family:inherit;font-size:13px;';
@@ -61,7 +62,10 @@ export default function Colaboradores({
   onNovo,
   onEditar,
   onExcluir,
+  tarefas = [],
+  onAbrirBitrix,
 }) {
+  const [colaboradorModal, setColaboradorModal] = useState(null);
   const [colunaOrdem, setColunaOrdem] = useState(null);
   const [direcaoOrdem, setDirecaoOrdem] = useState('asc'); // 'asc' | 'desc'
 
@@ -286,7 +290,19 @@ export default function Colaboradores({
                       {poloLabels[item.polo] || item.polo}
                     </span>
                   </td>
-                  <td style={s('padding:11px 14px;')}>
+                  <td
+                    style={s('padding:11px 14px;cursor:pointer;')}
+                    onClick={() =>
+                      setColaboradorModal({
+                        nome: item.colaboradorNome,
+                        papel: 'Cobrador(a)',
+                        polo: item.polo,
+                        criterio: formatarCriterioTexto(item),
+                        email: item.email,
+                      })
+                    }
+                    title="Clique para ver o desempenho deste colaborador nas tarefas"
+                  >
                     <div style={s('display:flex;align-items:center;gap:10px;')}>
                       <div
                         style={{
@@ -301,11 +317,22 @@ export default function Colaboradores({
                           fontSize: '11px',
                           fontWeight: 800,
                           flexShrink: 0,
+                          transition: 'transform 0.15s ease',
                         }}
                       >
                         {iniciais(item.colaboradorNome)}
                       </div>
-                      <span style={s('font-weight:700;color:#ECE6D8;')}>{item.colaboradorNome}</span>
+                      <span
+                        style={{
+                          fontWeight: 700,
+                          color: '#ECE6D8',
+                          textDecoration: 'underline',
+                          textDecorationColor: 'rgba(236,230,216,0.3)',
+                          textUnderlineOffset: '3px',
+                        }}
+                      >
+                        {item.colaboradorNome}
+                      </span>
                     </div>
                   </td>
                   <td style={s('padding:11px 14px;color:rgba(236,230,216,0.6);font-size:12px;font-family:inherit;')}>
@@ -339,11 +366,34 @@ export default function Colaboradores({
                       </span>
                     )}
                   </td>
-                  <td style={s('padding:11px 14px;')}>
+                  <td
+                    style={s('padding:11px 14px;' + (item.advogado ? 'cursor:pointer;' : ''))}
+                    onClick={() => {
+                      if (item.advogado) {
+                        setColaboradorModal({
+                          nome: item.advogado,
+                          papel: 'Advogado(a)',
+                          polo: item.polo,
+                          criterio: formatarCriterioTexto(item),
+                        });
+                      }
+                    }}
+                    title={item.advogado ? 'Clique para ver o desempenho deste advogado nas tarefas' : ''}
+                  >
                     {item.advogado ? (
                       <div style={s('display:flex;align-items:center;gap:6px;')}>
                         <IconScale />
-                        <span style={{ fontWeight: 700, color: '#5fc9a8' }}>{item.advogado}</span>
+                        <span
+                          style={{
+                            fontWeight: 700,
+                            color: '#5fc9a8',
+                            textDecoration: 'underline',
+                            textDecorationColor: 'rgba(95,201,168,0.35)',
+                            textUnderlineOffset: '3px',
+                          }}
+                        >
+                          {item.advogado}
+                        </span>
                       </div>
                     ) : (
                       <span style={{ fontSize: '11.5px', color: '#e0796f', fontStyle: 'italic', opacity: 0.75 }}>
@@ -383,6 +433,17 @@ export default function Colaboradores({
           </tbody>
         </table>
       </div>
+
+      {colaboradorModal && (
+        <ModalDesempenhoColaborador
+          colaborador={colaboradorModal}
+          tarefas={tarefas}
+          poloLabels={poloLabels}
+          corPolo={corPolo}
+          onClose={() => setColaboradorModal(null)}
+          onAbrirBitrix={onAbrirBitrix}
+        />
+      )}
     </div>
   );
 }
