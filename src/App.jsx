@@ -6,6 +6,7 @@ import Colaboradores from './components/Colaboradores.jsx';
 import Tarefas from './components/Tarefas.jsx';
 import Permissoes from './components/Permissoes.jsx';
 import Configuracoes from './components/Configuracoes.jsx';
+import Relatorios from './components/Relatorios.jsx';
 import ModalColaborador from './components/ModalColaborador.jsx';
 import ModalPolo from './components/ModalPolo.jsx';
 import ModalTarefasMetrica from './components/ModalTarefasMetrica.jsx';
@@ -413,6 +414,16 @@ export default function App() {
                 pagina={paginaTarefas}
                 setPagina={setPaginaTarefas}
                 advogados={advogados}
+                onAbrirBitrix={abrirTarefaNoBitrix}
+              />
+            )}
+            {screen === 'relatorios' && (
+              <Relatorios
+                tarefas={tarefas}
+                regras={regras}
+                polos={polos}
+                poloLabels={poloLabels}
+                corPolo={corPolo}
                 onAbrirBitrix={abrirTarefaNoBitrix}
               />
             )}

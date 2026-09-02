@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'motion/react';
-import { IconDash, IconUsers, IconClipboard, IconShield, IconSettings } from './Icons.jsx';
+import { IconDash, IconUsers, IconClipboard, IconReport, IconShield, IconSettings } from './Icons.jsx';
 import { s } from '../style.js';
 import { iniciais } from '../data.js';
 
@@ -8,6 +8,7 @@ const ITENS = [
   { key: 'dashboard', label: 'Painel Geral', Icon: IconDash },
   { key: 'colaboradores', label: 'Cobradores & Advogados', Icon: IconUsers },
   { key: 'tarefas', label: 'Andamento Processual', Icon: IconClipboard },
+  { key: 'relatorios', label: 'Relatórios', Icon: IconReport },
   { key: 'permissoes', label: 'Permissões', Icon: IconShield, apenasAdmin: true },
   { key: 'configuracoes', label: 'Configurações', Icon: IconSettings },
 ];

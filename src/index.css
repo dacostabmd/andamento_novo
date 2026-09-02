@@ -66,3 +66,37 @@ select option { background: #161616; color: #ECE6D8; }
 .modal-content {
   animation: modalFadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
+
+/* Estilos para Exportação em PDF e Impressão A4 Executiva */
+@media print {
+  aside, .sidebar, button, input {
+    display: none !important;
+  }
+  body, html {
+    background: #ffffff !important;
+    color: #111111 !important;
+    font-size: 10pt !important;
+  }
+  .relatorio-screen {
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 !important;
+    padding: 10px !important;
+  }
+  .relatorio-screen table {
+    color: #111111 !important;
+  }
+  .relatorio-screen table th {
+    background: #f4f4f4 !important;
+    color: #000000 !important;
+    border-bottom: 2px solid #ccc !important;
+  }
+  .relatorio-screen table td {
+    color: #222222 !important;
+    border-bottom: 1px solid #e0e0e0 !important;
+  }
+  .relatorio-screen * {
+    box-shadow: none !important;
+    text-shadow: none !important;
+  }
+}
