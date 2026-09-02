@@ -468,6 +468,8 @@ export default function App() {
           poloLabels={poloLabels}
           corPolo={corPolo}
           corDestaque={modalMetrica.cor || '#5b9bdb'}
+          polo={modalMetrica.polo}
+          regras={regras}
           onAbrirBitrix={abrirTarefaNoBitrix}
           onFechar={() => setModalMetrica(null)}
         />

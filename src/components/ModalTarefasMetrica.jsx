@@ -29,6 +29,8 @@ export default function ModalTarefasMetrica({
   poloLabels = {},
   corPolo = {},
   corDestaque = '#5b9bdb',
+  polo = null,
+  regras = [],
   onAbrirBitrix,
   onFechar,
 }) {
@@ -36,6 +38,63 @@ export default function ModalTarefasMetrica({
   const [pagina, setPagina] = useState(1);
   const [ordemColuna, setOrdemColuna] = useState('cliente');
   const [ordemDirecao, setOrdemDirecao] = useState('asc'); // 'asc' | 'desc'
+  const [filtroEquipeId, setFiltroEquipeId] = useState('todas');
+
+  // Identifica o código do polo deste modal
+  const poloAtual = useMemo(() => {
+    if (polo) return polo;
+    if (tarefas.length > 0 && tarefas[0].poloCobranca) {
+      return tarefas[0].poloCobranca;
+    }
+    return null;
+  }, [polo, tarefas]);
+
+  // Monta as equipes (Cobrador/Advogado) para cada CPF naquele polo no formato: Cobrador - Advogado - (Número(s) de CPF)
+  const equipesDoPolo = useMemo(() => {
+    if (!poloAtual || !regras || regras.length === 0) return [];
+    const regrasPolo = regras.filter((r) => r.polo === poloAtual);
+
+    return regrasPolo.map((r) => {
+      let critTexto = '';
+      if (r.ehEscalao48h) {
+        critTexto = '48 horas';
+      } else if (Array.isArray(r.digitosCpf) && r.digitosCpf.length > 0) {
+        const d = r.digitosCpf;
+        if (d.length === 1) critTexto = `CPF ${d[0]}`;
+        else if (d.length === 5 && d[0] === 0 && d[4] === 4) critTexto = 'CPF final 0 a 4';
+        else if (d.length === 5 && d[0] === 5 && d[4] === 9) critTexto = 'CPF final 5 a 9';
+        else if (d.length === 2) critTexto = `CPF ${d[0]} e ${d[1]}`;
+        else if (d.length === 3) critTexto = `CPF ${d[0]}, ${d[1]} e ${d[2]}`;
+        else if (d.length === 4) critTexto = `CPF ${d[0]}, ${d[1]}, ${d[2]} e ${d[3]}`;
+        else critTexto = `CPF ${d.join(', ')}`;
+      } else {
+        critTexto = 'Sem CPF vinculado';
+      }
+
+      const cobrador = r.colaboradorNome || 'Cobrador não definido';
+      const advogado = r.advogado || 'Sem advogado';
+      const label = `${cobrador} - ${advogado} - (${critTexto})`;
+
+      const qtdTarefas = tarefas.filter((t) => {
+        if (r.ehEscalao48h) return Boolean(t.emEscalao48h || t.ehEscalao48h);
+        if (Array.isArray(r.digitosCpf) && r.digitosCpf.length > 0) {
+          if (t.digitoCpfCliente != null && r.digitosCpf.includes(Number(t.digitoCpfCliente))) {
+            return true;
+          }
+        }
+        const cobT = (t.equipeCobrancaColaboradorNome || t.colaboradorNome || '').toLowerCase().trim();
+        const cobR = (r.colaboradorNome || '').toLowerCase().trim();
+        return Boolean(cobR && cobT && (cobT.includes(cobR) || cobR.includes(cobT)));
+      }).length;
+
+      return {
+        id: String(r.id),
+        regra: r,
+        label,
+        qtdTarefas,
+      };
+    });
+  }, [poloAtual, regras, tarefas]);
 
   // Verifica dimensões que realmente variam entre as tarefas deste modal para não exibir ordenações redundantes
   const polosDistintos = useMemo(
@@ -94,8 +153,29 @@ export default function ModalTarefasMetrica({
   const buscaNumeros = busca.replace(/\D/g, '');
 
   const tarefasFiltradas = useMemo(() => {
-    if (!buscaNorm) return tarefas;
-    return tarefas.filter((t) => {
+    let filtradas = tarefas;
+
+    // 1. Filtro por Equipe (select do modal)
+    if (filtroEquipeId !== 'todas') {
+      const eq = equipesDoPolo.find((e) => e.id === filtroEquipeId);
+      if (eq) {
+        const r = eq.regra;
+        filtradas = filtradas.filter((t) => {
+          if (r.ehEscalao48h) return Boolean(t.emEscalao48h || t.ehEscalao48h);
+          if (Array.isArray(r.digitosCpf) && r.digitosCpf.length > 0) {
+            const digitoOk = t.digitoCpfCliente != null && r.digitosCpf.includes(Number(t.digitoCpfCliente));
+            const cobT = (t.equipeCobrancaColaboradorNome || t.colaboradorNome || '').toLowerCase().trim();
+            const cobR = (r.colaboradorNome || '').toLowerCase().trim();
+            const cobOk = Boolean(cobR && cobT && (cobT.includes(cobR) || cobR.includes(cobT)));
+            return digitoOk || cobOk;
+          }
+          return false;
+        });
+      }
+    }
+
+    if (!buscaNorm) return filtradas;
+    return filtradas.filter((t) => {
       // 1. Advogado
       const adv = (t.equipeCobrancaAdvogado || '').toLowerCase();
       if (adv.includes(buscaNorm)) return true;
@@ -125,7 +205,7 @@ export default function ModalTarefasMetrica({
 
       return false;
     });
-  }, [tarefas, buscaNorm, buscaNumeros, poloLabels]);
+  }, [tarefas, filtroEquipeId, equipesDoPolo, buscaNorm, buscaNumeros, poloLabels]);
 
   // Ordenação por coluna
   const tarefasOrdenadas = useMemo(() => {
@@ -291,8 +371,44 @@ export default function ModalTarefasMetrica({
           </button>
         </div>
 
-        {/* Barra de Busca Multifiltro */}
+        {/* Barra de Busca e Filtro por Equipe/CPF */}
         <div style={{ padding: '12px 20px 8px 20px', flexShrink: 0 }}>
+          {equipesDoPolo.length > 0 && (
+            <div style={{ marginBottom: '10px', display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <label style={{ fontSize: '11.5px', color: '#f5dd90', fontWeight: 700, flexShrink: 0 }}>
+                Equipe (CPF):
+              </label>
+              <select
+                value={filtroEquipeId}
+                onChange={(e) => {
+                  setFiltroEquipeId(e.target.value);
+                  setPagina(1);
+                }}
+                style={{
+                  flex: 1,
+                  background: '#161616',
+                  color: '#ECE6D8',
+                  border: '1px solid rgba(245, 221, 144, 0.35)',
+                  borderRadius: '8px',
+                  padding: '7px 12px',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  outline: 'none',
+                }}
+              >
+                <option value="todas">
+                  Todas as equipes deste polo ({tarefas.length} tarefas)
+                </option>
+                {equipesDoPolo.map((eq) => (
+                  <option key={eq.id} value={eq.id}>
+                    {eq.label} ({eq.qtdTarefas} tarefas)
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
+
           <div
             style={{
               position: 'relative',
