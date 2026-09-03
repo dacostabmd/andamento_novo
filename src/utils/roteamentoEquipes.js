@@ -129,16 +129,29 @@ export function extrairEstadoUf(tarefa) {
   }
 
   // 4. Texto livre do título ou nome do cliente (ex.: "Carlos Eduardo (SP)" ou "Cobrança - BA")
+  //
+  // Sigla em CAIXA ALTA apenas. O flag `i` de antes fazia palavras comuns do
+  // português virarem UF: "verificar SE o cliente pagou" resolvia para SE
+  // (Sergipe). Como o polo resultante era gravado normalmente, a tarefa ficava
+  // indistinguível de um roteamento legítimo — contaminação silenciosa, que é
+  // pior do que ficar sem polo (esta ao menos aparece em "Sem vínculo").
   const texto = `${tarefa.titulo || ''} ${tarefa.clienteNome || ''} ${tarefa.projetoNome || ''}`;
-  const matchTexto = texto.match(/\b(AC|AL|AP|AM|BA|CE|DF|ES|GO|MA|MT|MS|MG|PA|PB|PR|PE|PI|RJ|RN|RS|RO|RR|SC|SP|SE|TO)\b/i);
-  if (matchTexto && UF_PARA_POLO[matchTexto[1].toUpperCase()]) {
-    return matchTexto[1].toUpperCase();
+  const matchTexto = texto.match(/\b(AC|AL|AP|AM|BA|CE|DF|ES|GO|MA|MT|MS|MG|PA|PB|PR|PE|PI|RJ|RN|RS|RO|RR|SC|SP|SE|TO)\b/);
+  if (matchTexto && UF_PARA_POLO[matchTexto[1]]) {
+    return matchTexto[1];
   }
 
-  // 5. Nomes de estados por extenso no texto
+  // 5. Nomes de estados por extenso no texto.
+  //
+  // Com fronteira de palavra, e sem a chave "para": é preposição corrente em
+  // português ("enviar para o cliente") e, por `includes` cru, roteava boa
+  // parte do backlog para o polo DF-PA-MS. "Pará" segue reconhecido pela forma
+  // acentuada e pela sigla no nível 4.
   const textoMin = texto.toLowerCase();
   for (const [nomeExtenso, uf] of Object.entries(NOMES_ESTADOS_PARA_UF)) {
-    if (textoMin.includes(nomeExtenso)) {
+    if (nomeExtenso === 'para') continue;
+    const limite = new RegExp(`(?:^|[^a-zà-ú])${nomeExtenso}(?:$|[^a-zà-ú])`, 'i');
+    if (limite.test(textoMin)) {
       return uf;
     }
   }
@@ -147,27 +160,37 @@ export function extrairEstadoUf(tarefa) {
 }
 
 /**
- * Determina se a tarefa está no escalão de 48 horas:
- * - Marcada explicitamente como escalão 48h; OU
- * - Criada/sem atividade há mais de 48h e ainda não finalizada.
+ * Determina se a tarefa está no escalão de contingência de 48 horas.
+ *
+ * Espelha a regra canônica do backend (obterTarefasElegiveisEscalao48h, em
+ * backend/src/db.ts): criada há mais de 48h E **nunca atendida**. Escalão é
+ * contingência para card que ninguém tocou — não é medida de idade do backlog.
+ *
+ * A versão anterior caía em `atualizadoEm || primeiraAtividadeEm || criadoEm`
+ * e ignorava `atendidoEm`. Como os dois primeiros campos não existem no
+ * payload de tarefa, o `dataRef` era sempre `criadoEm` e a condição virava
+ * "aberta há mais de 48h" — o que classificava praticamente todo o backlog
+ * como escalão (77% da base no painel auditado) e, pior, tinha prioridade
+ * sobre o dígito de CPF no roteamento abaixo, concentrando as tarefas na
+ * linha de contingência em vez de distribuí-las entre os cobradores.
  */
 export function ehTarefaEscalao48h(tarefa) {
   if (!tarefa) return false;
+
+  // Estado persistido pelo backend: uma vez escalada, permanece escalada.
   if (Boolean(tarefa.emEscalao48h || tarefa.ehEscalao48h)) return true;
 
-  // Se a tarefa não estiver concluída, calcula o tempo decorrido desde a criação ou última atividade
-  if (tarefa.situacaoPrazo !== 'concluida') {
-    const dataRef = tarefa.atualizadoEm || tarefa.primeiraAtividadeEm || tarefa.criadoEm;
-    if (dataRef) {
-      const data = new Date(dataRef).getTime();
-      if (!Number.isNaN(data) && data > 0) {
-        const horas = (Date.now() - data) / (1000 * 60 * 60);
-        if (horas >= 48) return true;
-      }
-    }
-  }
+  if (tarefa.situacaoPrazo === 'concluida') return false;
 
-  return false;
+  // Já atendida (comentário, arquivo ou saída de "aguardando execução") sai da
+  // contingência, por mais antiga que seja.
+  if (tarefa.atendidoEm) return false;
+
+  if (!tarefa.criadoEm) return false;
+  const criadaMs = new Date(tarefa.criadoEm).getTime();
+  if (Number.isNaN(criadaMs) || criadaMs <= 0) return false;
+
+  return (Date.now() - criadaMs) / (1000 * 60 * 60) >= 48;
 }
 
 /**
@@ -255,14 +278,30 @@ export function limparNomeExibicao(texto) {
 }
 
 /**
- * Extrai uma chave limpa e canônica para deduplicação de nomes.
+ * Chave canônica para deduplicação — o TÍTULO da tarefa, não o nome do cliente.
+ *
+ * A versão anterior usava `clienteNome` e removia os sufixos operacionais, o
+ * que fundia processos legitimamente distintos do mesmo cliente: "Fulano —
+ * ANDAMENTO MENSAL", "Fulano — COBRANÇA MENSAL", "Fulano (EXECUTADO)" e
+ * "Fulano (RÉU)" colapsavam num só registro. Num teste com 4 processos de um
+ * mesmo cliente, 55% do faturamento e todas as conclusões desapareciam.
+ *
+ * Esses sufixos identificam o TIPO de processo (o próprio comentário de
+ * RE_SUFIXOS_OPERACIONAIS diz isso) e a posição processual — executado e réu
+ * são papéis distintos, com trabalho distinto. Só "(Cópia)" indica duplicata
+ * de verdade, então só ele sai da chave.
+ *
+ * Alinha-se ao backend, que também deduplica por título
+ * (deduplicarTarefasPorTitulo, em backend/src/triagem.ts).
  */
+const RE_SUFIXO_COPIA = /\s*[-–—]?\s*\(C[óo]pia\)\s*/gi;
+
 export function extrairChaveNomeDeduplicacao(tarefa) {
   if (!tarefa) return '';
-  const base = tarefa.clienteNome || tarefa.titulo || '';
+  const base = tarefa.titulo || tarefa.clienteNome || '';
   return String(base)
     .replace(/^['"`/\\.\-_*#~!?|:;\s]+/, '')
-    .replace(RE_SUFIXOS_OPERACIONAIS, ' ')
+    .replace(RE_SUFIXO_COPIA, ' ')
     .replace(/\s+/g, ' ')
     .trim()
     .toLowerCase();
@@ -385,16 +424,20 @@ export function normalizarTarefas(tarefas, regras = MOCK_REGRAS) {
       continue;
     }
 
-    // Se já existe uma tarefa com o MESMO NOME no MESMO GRUPO:
-    // Decide qual manter (prioriza a mais recente ou com status ativo sobre concluída redundante)
+    // Mesmo título no mesmo grupo: decide qual registro sobrevive.
+    //
+    // A CONCLUÍDA vence, espelhando deduplicarTarefasPorTitulo no backend
+    // (triagem.ts). A regra anterior era a inversa — mantinha a ativa e
+    // descartava a concluída —, o que deprimia a taxa de conclusão de todo o
+    // painel, com viés maior justamente sobre quem mais entrega. Os dois
+    // estágios da mesma pipeline decidiam ao contrário um do outro.
     const exEhConcluida = existente.situacaoPrazo === 'concluida' || existente.status === 5;
     const novaEhConcluida = normalizada.situacaoPrazo === 'concluida' || normalizada.status === 5;
 
-    if (exEhConcluida && !novaEhConcluida) {
-      // Nova está ativa (no prazo/atrasada), substitui a concluída antiga
+    if (novaEhConcluida && !exEhConcluida) {
       mapaPorGrupoENome.set(chaveUnica, normalizada);
-    } else if (!exEhConcluida && novaEhConcluida) {
-      // Mantém a existente ativa
+    } else if (exEhConcluida && !novaEhConcluida) {
+      // Mantém a concluída já registrada.
     } else {
       // Ambos mesmo status: mantém a de maior ID ou data mais recente
       const idAtual = Number(normalizada.id) || 0;

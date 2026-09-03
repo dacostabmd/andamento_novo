@@ -6,6 +6,13 @@ import AnimatedList from './AnimatedList.jsx';
 
 const PAGE_SIZE = 20;
 
+// Ver nota equivalente em Dashboard.jsx: taxa sem base de cálculo é null e
+// se apresenta como "—". Aqui a base é o valor efetivamente movimentado no
+// Asaas (recebido + inadimplente), não a contagem de casos.
+const fmtPct = (v, casas = 0) => (v === null || v === undefined || isNaN(v) ? '—' : v.toFixed(casas) + '%');
+const corTaxa = (v, limite = 70) =>
+  v === null || v === undefined || isNaN(v) ? 'rgba(236,230,216,0.35)' : v >= limite ? '#5fc9a8' : 'rgba(236,230,216,0.5)';
+
 const COLUNAS_ORDENACAO = [
   { key: 'cliente', label: 'Cliente' },
   { key: 'status', label: 'Status' },
@@ -150,9 +157,7 @@ export default function ModalTarefasMetrica({
       }
 
       const somaAsaas = totalRecebido + totalInadimplente;
-      const taxaAdimplencia = somaAsaas > 0
-        ? (totalRecebido / somaAsaas) * 100
-        : ((adimplentesCount + inadimplentesCount) > 0 ? (adimplentesCount / (adimplentesCount + inadimplentesCount)) * 100 : 100);
+      const taxaAdimplencia = somaAsaas > 0 ? (totalRecebido / somaAsaas) * 100 : null;
 
       return {
         id: eq.id,
@@ -243,9 +248,7 @@ export default function ModalTarefasMetrica({
       return Array.from(mapa.values())
         .map((item) => {
           const somaAsaas = item.totalRecebido + item.totalInadimplente;
-          const taxa = somaAsaas > 0
-            ? (item.totalRecebido / somaAsaas) * 100
-            : ((item.adimplentesCount + item.inadimplentesCount) > 0 ? (item.adimplentesCount / (item.adimplentesCount + item.inadimplentesCount)) * 100 : 100);
+          const taxa = somaAsaas > 0 ? (item.totalRecebido / somaAsaas) * 100 : null;
           return { ...item, taxaAdimplencia: taxa };
         })
         .sort((a, b) => (b.totalFaturamento - a.totalFaturamento) || (b.totalRecebido - a.totalRecebido) || (b.tarefasCount - a.tarefasCount));
@@ -730,8 +733,8 @@ export default function ModalTarefasMetrica({
                           <div style={{ fontSize: '13px', fontWeight: 800, color: '#f5dd90' }}>
                             R$ {time.totalFaturamento.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                           </div>
-                          <div style={{ fontSize: '10px', color: time.taxaAdimplencia >= 70 ? '#5fc9a8' : 'rgba(236,230,216,0.5)', marginTop: '2px' }}>
-                            {time.taxaAdimplencia.toFixed(0)}% adimplência
+                          <div style={{ fontSize: '10px', color: corTaxa(time.taxaAdimplencia), marginTop: '2px' }}>
+                            {fmtPct(time.taxaAdimplencia)} adimplência
                           </div>
                         </div>
                       </div>
@@ -780,8 +783,8 @@ export default function ModalTarefasMetrica({
                           <div style={{ fontSize: '11.5px', fontWeight: 800, color: '#f5dd90' }}>
                             R$ {cob.totalFaturamento.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                           </div>
-                          <div style={{ fontSize: '9.5px', color: cob.taxaAdimplencia >= 70 ? '#5fc9a8' : 'rgba(236,230,216,0.5)' }}>
-                            {cob.taxaAdimplencia.toFixed(0)}% adimp.
+                          <div style={{ fontSize: '9.5px', color: corTaxa(cob.taxaAdimplencia) }}>
+                            {fmtPct(cob.taxaAdimplencia)} adimp.
                           </div>
                         </div>
                       </div>
@@ -830,8 +833,8 @@ export default function ModalTarefasMetrica({
                           <div style={{ fontSize: '11.5px', fontWeight: 800, color: '#f5dd90' }}>
                             R$ {adv.totalFaturamento.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                           </div>
-                          <div style={{ fontSize: '9.5px', color: adv.taxaAdimplencia >= 70 ? '#5fc9a8' : 'rgba(236,230,216,0.5)' }}>
-                            {adv.taxaAdimplencia.toFixed(0)}% adimp.
+                          <div style={{ fontSize: '9.5px', color: corTaxa(adv.taxaAdimplencia) }}>
+                            {fmtPct(adv.taxaAdimplencia)} adimp.
                           </div>
                         </div>
                       </div>

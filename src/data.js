@@ -1,6 +1,61 @@
 export const COR_STATUS = { concluida: '#5fc9a8', atrasada: '#e0796f', no_prazo: '#5b9bdb' };
 export const STATUS_LABEL = { concluida: 'Concluída', atrasada: 'Atrasada', no_prazo: 'No prazo' };
 
+// ── Limiares e formatação de indicadores ────────────────────────────────
+//
+// Centralizados aqui porque estavam divergentes entre telas: a mesma taxa de
+// atraso virava vermelha a 30% no modal do colaborador e só a 50% no painel,
+// então 45% de atraso aparecia verde numa tela e vermelho na outra. Um corte
+// de cor é uma afirmação sobre o negócio ("isto é ruim") e não pode depender
+// de qual tela o gestor abriu.
+export const COR_BOA = '#5fc9a8';
+export const COR_ALERTA = '#f5dd90';
+export const COR_RUIM = '#e0796f';
+export const COR_INDETERMINADA = 'rgba(236,230,216,0.35)';
+
+// Adimplência e conclusão: quanto MAIOR, melhor.
+export const LIMIAR_ADIMPLENCIA = { bom: 75, alerta: 50 };
+export const LIMIAR_CONCLUSAO = { bom: 40, alerta: 20 };
+// Atraso: quanto MENOR, melhor (a escala se inverte).
+export const LIMIAR_ATRASO = { bom: 20, alerta: 40 };
+
+// Abaixo deste n, uma taxa percentual não é comparável às demais: 1 tarefa
+// adimplente vira "100%" e ficaria colorida igual a quem tem 400 tarefas e
+// 92%. Nesses casos a UI mostra o valor em cor neutra e declara o tamanho da
+// amostra, em vez de premiar o acaso.
+export const N_MINIMO_TAXA = 5;
+
+/** Taxa indeterminada (sem base de cálculo) vira "—", nunca 0% nem 100%. */
+export function fmtPct(v, casas = 1) {
+  return v === null || v === undefined || isNaN(v) ? '—' : v.toFixed(casas) + '%';
+}
+
+/**
+ * Cor de uma taxa "maior é melhor". Passe `n` (tamanho da amostra) para que
+ * taxas apoiadas em poucos casos saiam neutras em vez de verdes.
+ */
+export function corTaxa(v, limiar = LIMIAR_ADIMPLENCIA, n = null) {
+  if (v === null || v === undefined || isNaN(v)) return COR_INDETERMINADA;
+  if (n !== null && n < N_MINIMO_TAXA) return COR_INDETERMINADA;
+  if (v >= limiar.bom) return COR_BOA;
+  if (v >= limiar.alerta) return COR_ALERTA;
+  return COR_RUIM;
+}
+
+/** Cor de uma taxa "menor é melhor" (atraso). */
+export function corTaxaInversa(v, limiar = LIMIAR_ATRASO, n = null) {
+  if (v === null || v === undefined || isNaN(v)) return COR_INDETERMINADA;
+  if (n !== null && n < N_MINIMO_TAXA) return COR_INDETERMINADA;
+  if (v <= limiar.bom) return COR_BOA;
+  if (v <= limiar.alerta) return COR_ALERTA;
+  return COR_RUIM;
+}
+
+/** true quando a amostra é pequena demais para a taxa ser comparável. */
+export function amostraPequena(n) {
+  return typeof n === 'number' && n > 0 && n < N_MINIMO_TAXA;
+}
+
 export const PERM_COLS = [
   { key: 'painel', label: 'Painel Geral' },
   { key: 'colaboradores', label: 'Colaboradores & Advogados' },

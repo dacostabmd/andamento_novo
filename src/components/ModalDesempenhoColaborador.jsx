@@ -1,5 +1,6 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { createPortal } from 'react-dom';
+import { fmtPct, corTaxaInversa } from '../data.js';
 
 // Estilos utilitários inline
 const s = (str) => {
@@ -137,7 +138,11 @@ export default function ModalDesempenhoColaborador({
     const noPrazo = tarefasDoColaborador.filter((t) => t.situacaoPrazo === 'no_prazo');
 
     const taxaConclusao = total > 0 ? (concluidas.length / total) * 100 : 0;
-    const taxaAtraso = total > 0 ? (atrasadas.length / total) * 100 : 0;
+    // Atraso sobre o backlog EM ABERTO (mesma definição do painel): incluir as
+    // concluídas no denominador fazia a taxa cair a cada entrega, sem que
+    // nenhum atraso tivesse sido resolvido.
+    const abertas = atrasadas.length + noPrazo.length;
+    const taxaAtraso = abertas > 0 ? (atrasadas.length / abertas) * 100 : null;
 
     // Conclusão desde a criação da tarefa (tempo médio)
     let somaTempoConclusaoMs = 0;
@@ -439,13 +444,13 @@ export default function ModalDesempenhoColaborador({
             }}
           >
             <div style={{ fontSize: '11px', color: 'rgba(236,230,216,0.5)', fontWeight: 600 }}>
-              TEMPO ENTRE ATIVIDADES
+              TEMPO ATÉ 1ª RESPOSTA
             </div>
             <div style={{ fontSize: '24px', fontWeight: 800, marginTop: '4px', color: '#f5dd90' }}>
               {formatarDuracao(metricas.tempoMedioAtividadesMs)}
             </div>
             <div style={{ fontSize: '11px', color: 'rgba(236,230,216,0.5)', marginTop: '6px' }}>
-              Intervalo médio de resposta
+              Da criação ao primeiro atendimento
             </div>
           </div>
 
@@ -466,10 +471,10 @@ export default function ModalDesempenhoColaborador({
                 fontSize: '24px',
                 fontWeight: 800,
                 marginTop: '4px',
-                color: metricas.taxaAtraso > 30 ? '#e0796f' : '#5fc9a8',
+                color: corTaxaInversa(metricas.taxaAtraso),
               }}
             >
-              {metricas.taxaAtraso.toFixed(1)}%
+              {fmtPct(metricas.taxaAtraso)}
             </div>
             <div style={{ fontSize: '11px', color: 'rgba(236,230,216,0.5)', marginTop: '6px' }}>
               {metricas.atrasadasCount} de {metricas.total} atrasadas

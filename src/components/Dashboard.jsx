@@ -3,10 +3,19 @@ import { useState, useMemo } from 'react';
 import { s } from '../style.js';
 import { IconTrophy } from './Icons.jsx';
 import { identificarPoloDaTarefa } from '../utils/roteamentoEquipes.js';
+import { fmtPct, corTaxa, corTaxaInversa, LIMIAR_CONCLUSAO, COR_BOA, COR_INDETERMINADA } from '../data.js';
 
 const CARD = 'background:rgba(255,255,255,0.02);border:1px solid rgba(199,199,199,0.12);border-radius:9px;padding:12px 14px;';
 const CARD_LABEL = 'font-size:11px;color:rgba(236,230,216,0.5);';
 const CARD_SUB = 'font-size:10px;color:rgba(236,230,216,0.4);margin-top:2px;';
+
+// fmtPct/corTaxa/corTaxaInversa e os limiares vivem em data.js — a mesma taxa
+// precisa ter a mesma cor em todas as telas.
+// Ordena null sempre por último, independentemente da direção.
+// Indeterminado nunca vence um ranking: vai para o extremo "pior" conforme a
+// direção (menorEhMelhor = ranking crescente, como taxa de atraso).
+const ordNulo = (v, menorEhMelhor = false) =>
+  v === null || v === undefined || isNaN(v) ? (menorEhMelhor ? Infinity : -Infinity) : v;
 
 function InfograficoProjecao({ dadosMM, isHovered = false }) {
   const width = 200;
@@ -139,7 +148,9 @@ export default function Dashboard({ regras, polos, poloLabels, corPolo, tarefas,
     const concluidas = tarefas.filter((t) => t.situacaoPrazo === 'concluida').length;
     const atrasadas = tarefas.filter((t) => t.situacaoPrazo === 'atrasada').length;
     const noPrazo = total - concluidas - atrasadas;
-    const taxaAtraso = total > 0 ? (atrasadas / total) * 100 : 0;
+    // Ver nota em porPolo: atraso mede-se sobre o backlog EM ABERTO.
+    const abertasGeral = atrasadas + noPrazo;
+    const taxaAtraso = abertasGeral > 0 ? (atrasadas / abertasGeral) * 100 : null;
 
     let totalCobranca = 0;
     let totalCobrancaAdimplente = 0;
@@ -163,9 +174,16 @@ export default function Dashboard({ regras, polos, poloLabels, corPolo, tarefas,
 
     const totalFat = totalCobranca;
     const totalComSituacao = totalCobrancaAdimplente + totalCobrancaInadimplente;
+    // Ponderada por VALOR, sempre. A variante por contagem de casos é outra
+    // métrica e vai exposta à parte — trocar de unidade no fallback fazia dois
+    // KPIs diferentes dividirem o mesmo rótulo. Sem base de cálculo o valor é
+    // null (a UI mostra "—"), nunca 100%: ausência de dado não é adimplência.
     const pctAdimplenteGeral = totalComSituacao > 0
       ? (totalCobrancaAdimplente / totalComSituacao) * 100
-      : ((adimplentes + inadimplentes) > 0 ? (adimplentes / (adimplentes + inadimplentes)) * 100 : 100);
+      : null;
+    const pctAdimplenteCasos = (adimplentes + inadimplentes) > 0
+      ? (adimplentes / (adimplentes + inadimplentes)) * 100
+      : null;
 
     if (criterio === 'faturamento') {
       return [
@@ -177,12 +195,12 @@ export default function Dashboard({ regras, polos, poloLabels, corPolo, tarefas,
           cor: '#f5dd90',
         },
         {
-          valor: `${pctAdimplenteGeral.toFixed(1)}%`,
+          valor: fmtPct(pctAdimplenteGeral),
           label: 'TAXA DE ADIMPLÊNCIA',
           desc: `${adimplentes} adimplentes de ${adimplentes + inadimplentes} clientes mapeados`,
           n: pctAdimplenteGeral,
           isPct: true,
-          cor: pctAdimplenteGeral >= 75 ? '#5fc9a8' : '#f5dd90',
+          cor: corTaxa(pctAdimplenteGeral),
         },
         {
           valor: `R$ ${totalCobrancaAdimplente.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`,
@@ -204,36 +222,86 @@ export default function Dashboard({ regras, polos, poloLabels, corPolo, tarefas,
     return [
       { valor: String(noPrazo), label: 'EM ANDAMENTO', desc: 'Tarefas ativas dentro do prazo', n: noPrazo, cor: '#5b9bdb' },
       { valor: String(atrasadas), label: 'ATRASADAS', desc: 'Não concluídas com prazo já vencido', n: atrasadas, cor: '#e0796f' },
-      { valor: taxaAtraso.toFixed(1) + '%', label: 'TAXA DE ATRASO', desc: `${atrasadas} de ${total} tarefa(s) consideradas`, n: taxaAtraso, isPct: true, cor: '#e0796f' },
+      { valor: fmtPct(taxaAtraso), label: 'TAXA DE ATRASO', desc: `${atrasadas} de ${abertasGeral} tarefa(s) em aberto`, n: taxaAtraso, isPct: true, cor: corTaxaInversa(taxaAtraso) },
       { valor: String(concluidas), label: 'CONCLUÍDAS', desc: 'Tarefas com status "Concluído"', n: concluidas, cor: '#5fc9a8' },
     ];
   }, [tarefas, criterio]);
 
   const porPolo = useMemo(() => {
     const totalGeral = tarefas.length;
+
+    // Atribuição ÚNICA: cada tarefa pertence a no máximo um polo.
+    //
+    // Antes, o filtro rodava uma vez POR POLO com quatro critérios em OR, e o
+    // mesmo card entrava em todos os polos que casassem — bastava um advogado
+    // atender dois polos para a tabela contar tudo em dobro (medido: 200% do
+    // volume real, e "% Volume Geral" somando acima de 100%). Resolvendo o polo
+    // uma vez, por ordem de precedência, a soma das linhas fecha com o topo.
+    const poloPorCobrador = new Map();
+    const poloPorAdvogado = new Map();
+    for (const r of regras) {
+      const cob = (r.colaboradorNome || '').toLowerCase().trim();
+      const adv = (r.advogado || '').toLowerCase().trim();
+      if (cob && !poloPorCobrador.has(cob)) poloPorCobrador.set(cob, r.polo);
+      if (adv && !poloPorAdvogado.has(adv)) poloPorAdvogado.set(adv, r.polo);
+    }
+
+    const resolverPolo = (t) => {
+      if (t.poloCobranca) return t.poloCobranca;
+      const identificado = identificarPoloDaTarefa(t, regras);
+      if (identificado) return identificado;
+      const cob = (t.equipeCobrancaColaboradorNome || t.colaboradorNome || t.responsavelNome || '').toLowerCase().trim();
+      if (cob && poloPorCobrador.has(cob)) return poloPorCobrador.get(cob);
+      const adv = (t.equipeCobrancaAdvogado || t.advogado || '').toLowerCase().trim();
+      if (adv && poloPorAdvogado.has(adv)) return poloPorAdvogado.get(adv);
+      return null;
+    };
+
+    const tarefasPorPolo = new Map();
+    for (const t of tarefas) {
+      const codigo = resolverPolo(t);
+      if (!codigo) continue;
+      const lista = tarefasPorPolo.get(codigo);
+      if (lista) lista.push(t);
+      else tarefasPorPolo.set(codigo, [t]);
+    }
+
     return polos.map((p) => {
       const membrosDoPolo = regras.filter((r) => r.polo === p.codigo);
-      const nomesCobradores = new Set(membrosDoPolo.map((r) => (r.colaboradorNome || '').toLowerCase().trim()).filter(Boolean));
-      const nomesAdvogados = new Set(membrosDoPolo.map((r) => (r.advogado || '').toLowerCase().trim()).filter(Boolean));
-      const doPolo = tarefas.filter((t) => {
-        if (t.poloCobranca === p.codigo) return true;
-        const poloIdentificado = identificarPoloDaTarefa(t, regras);
-        if (poloIdentificado === p.codigo) return true;
-        const cob = (t.equipeCobrancaColaboradorNome || t.colaboradorNome || t.responsavelNome || '').toLowerCase().trim();
-        const adv = (t.equipeCobrancaAdvogado || t.advogado || '').toLowerCase().trim();
-        if (cob && nomesCobradores.has(cob)) return true;
-        if (adv && nomesAdvogados.has(adv)) return true;
-        return false;
-      });
+      const doPolo = tarefasPorPolo.get(p.codigo) || [];
       const total = doPolo.length;
       const concluidas = doPolo.filter((t) => t.situacaoPrazo === 'concluida').length;
       const atrasadas = doPolo.filter((t) => t.situacaoPrazo === 'atrasada').length;
       const noPrazo = total - concluidas - atrasadas;
-      const taxaAtraso = total > 0 ? (atrasadas / total) * 100 : 0;
-      const rapidez = total > 0 ? ((concluidas + noPrazo) / total) * 100 : 0;
+      // Atraso sobre o backlog EM ABERTO, não sobre o total.
+      //
+      // Dividir pelo total incluía as concluídas no denominador — e uma tarefa
+      // concluída não pode estar atrasada. O efeito era perverso: concluir
+      // tarefas no prazo derrubava a taxa de atraso sem que um único atraso
+      // fosse resolvido. Com 30 atrasadas e 30 em aberto, o painel mostrava
+      // 30% quando a leitura correta é 100% do backlog aberto atrasado.
+      const abertas = atrasadas + noPrazo;
+      const taxaAtraso = abertas > 0 ? (atrasadas / abertas) * 100 : null;
       const pctVolumeGeral = totalGeral > 0 ? (total / totalGeral) * 100 : 0;
       const pontos = concluidas * 1;
-      const baseResolucao = rapidez;
+      // "Rapidez" era ((concluidas + noPrazo) / total), algebricamente idêntica
+      // a 100 - taxaAtraso (verificado): duas leituras do MESMO indicador, e
+      // nenhuma delas media tempo. Vira "Conformidade de Prazo", que é o que a
+      // fórmula de fato expressa, e passa a derivar da taxa corrigida.
+      const conformidadePrazo = taxaAtraso === null ? null : 100 - taxaAtraso;
+
+      // ATENÇÃO — mm7/mm15/mm30 abaixo NÃO são médias móveis.
+      //
+      // São o valor atual somado a constantes fixas: não existe série histórica
+      // no banco (não há tabela de snapshot), então não há o que promediar. Como
+      // as três séries terminam no mesmo ponto, os cards "Janela 7/15/30 Dias"
+      // exibiam sempre o mesmo número, e todo polo desenhava a mesma curva.
+      //
+      // O critério "Projeção de Atendimento" foi retirado do seletor por isso.
+      // Estes arrays continuam aqui apenas para não quebrar o componente que os
+      // consome; ao criar a tabela de snapshot diário, substitua-os por médias
+      // reais e devolva a opção ao seletor.
+      const baseResolucao = conformidadePrazo === null ? 0 : conformidadePrazo;
       const mm7 = [Math.max(5, baseResolucao - 8), Math.max(5, baseResolucao - 2), Math.min(95, baseResolucao + 6), Math.max(5, baseResolucao - 4), Math.min(98, baseResolucao + 5), baseResolucao];
       const mm15 = [Math.max(5, baseResolucao - 4), Math.max(5, baseResolucao - 1), Math.min(95, baseResolucao + 3), Math.max(5, baseResolucao + 1), Math.min(95, baseResolucao + 2), baseResolucao];
       const mm30 = [Math.max(5, baseResolucao - 2), Math.max(5, baseResolucao - 1), baseResolucao, Math.min(95, baseResolucao + 1), baseResolucao, baseResolucao];
@@ -262,9 +330,13 @@ export default function Dashboard({ regras, polos, poloLabels, corPolo, tarefas,
 
       const totalFaturamento = totalValorCobranca;
       const totalComSit = totalCobrancaAdimplente + totalCobrancaInadimplente;
-      const taxaAdimplencia = totalComSit > 0 
-        ? (totalCobrancaAdimplente / totalComSit) * 100 
-        : ((adimplentesCount + inadimplentesCount) > 0 ? (adimplentesCount / (adimplentesCount + inadimplentesCount)) * 100 : 100);
+      // Ver nota em 'resumo': ponderada por valor, null quando não há base.
+      // Esta taxa ordena o ranking e elege o "Polo Destaque" — um fallback de
+      // 100% fazia o polo SEM dado financeiro liderar a empresa.
+      const taxaAdimplencia = totalComSit > 0
+        ? (totalCobrancaAdimplente / totalComSit) * 100
+        : null;
+      const coberturaSituacao = totalFaturamento > 0 ? (totalComSit / totalFaturamento) * 100 : null;
 
       return {
         codigo: p.codigo,
@@ -274,7 +346,7 @@ export default function Dashboard({ regras, polos, poloLabels, corPolo, tarefas,
         atrasadas,
         noPrazo,
         taxaAtraso,
-        rapidez,
+        conformidadePrazo,
         taxaResolucao,
         pctVolumeGeral,
         pontos,
@@ -301,9 +373,9 @@ export default function Dashboard({ regras, polos, poloLabels, corPolo, tarefas,
     const comTarefas = porPolo.filter((p) => p.total > 0);
     if (comTarefas.length === 0) return null;
     if (criterio === 'faturamento') {
-      return [...comTarefas].sort((a, b) => (b.taxaAdimplencia - a.taxaAdimplencia) || (b.totalFaturamento - a.totalFaturamento))[0];
+      return [...comTarefas].sort((a, b) => (ordNulo(b.taxaAdimplencia) - ordNulo(a.taxaAdimplencia)) || (b.totalFaturamento - a.totalFaturamento))[0];
     }
-    return [...comTarefas].sort((a, b) => a.taxaAtraso - b.taxaAtraso)[0];
+    return [...comTarefas].sort((a, b) => ordNulo(a.taxaAtraso, true) - ordNulo(b.taxaAtraso, true))[0];
   }, [porPolo, criterio]);
 
   const polosOrdenadosTabela = useMemo(() => {
@@ -312,13 +384,32 @@ export default function Dashboard({ regras, polos, poloLabels, corPolo, tarefas,
       let valA = a[tabelaOrdemColuna];
       let valB = b[tabelaOrdemColuna];
       if (typeof valA === 'string') return tabelaOrdemDir === 'asc' ? valA.localeCompare(valB, 'pt-BR') : valB.localeCompare(valA, 'pt-BR');
-      const diff = tabelaOrdemDir === 'asc' ? (valA || 0) - (valB || 0) : (valB || 0) - (valA || 0);
+      // Indeterminado (null) fica sempre no fim, nas duas direções: sem base de
+      // cálculo o polo não compete no ranking, nem como melhor nem como pior.
+      const aNulo = valA === null || valA === undefined || isNaN(valA);
+      const bNulo = valB === null || valB === undefined || isNaN(valB);
+      if (aNulo !== bNulo) return aNulo ? 1 : -1;
+      const diff = aNulo && bNulo ? 0 : (tabelaOrdemDir === 'asc' ? valA - valB : valB - valA);
       if (diff !== 0) return diff;
       // Desempate secundário inteligente: maior pontuação (concluídas) e volume total
       return (b.pontos || 0) - (a.pontos || 0) || (b.total || 0) - (a.total || 0);
     });
     return lista;
   }, [porPolo, tabelaOrdemColuna, tabelaOrdemDir]);
+
+  // Medalha de pódio só faz sentido quando a ordenação corrente expressa
+  // DESEMPENHO, e no sentido certo. Antes, a posição saía do índice da lista
+  // qualquer que fosse a coluna: ordenar por "Atrasadas ▼" coroava o polo com
+  // mais atrasos como "★ 1º" em dourado.
+  const COLUNAS_DESEMPENHO = {
+    pontos: 'desc',
+    concluidas: 'desc',
+    taxaAdimplencia: 'desc',
+    conformidadePrazo: 'desc',
+    taxaAtraso: 'asc',
+    atrasadas: 'asc',
+  };
+  const premiaTopo = COLUNAS_DESEMPENHO[tabelaOrdemColuna] === tabelaOrdemDir;
 
   const alternarOrdemTabela = (coluna) => {
     if (tabelaOrdemColuna === coluna) setTabelaOrdemDir((prev) => (prev === 'asc' ? 'desc' : 'asc'));
@@ -331,7 +422,7 @@ export default function Dashboard({ regras, polos, poloLabels, corPolo, tarefas,
     if (criterio === 'faturamento') {
       if (r.label === 'FATURAMENTO TOTAL') {
         tarefasFiltradas = tarefas.filter((t) => t.valorCobranca != null || t.valorRecebidoAsaas != null || t.valorInadimplente != null);
-      } else if (r.label === 'RECEBIDO (ASAAS)' || (r.label === 'TAXA DE ADIMPLÊNCIA' && r.isPct)) {
+      } else if (r.label === 'RECEBIDO (ADIMPLENTE)' || (r.label === 'TAXA DE ADIMPLÊNCIA' && r.isPct)) {
         tarefasFiltradas = tarefas.filter((t) => (t.situacaoFinanceira || '').toUpperCase() === 'ADIMPLENTE');
       } else if (r.label === 'INADIMPLENTE (ASAAS)') {
         tarefasFiltradas = tarefas.filter((t) => (t.situacaoFinanceira || '').toUpperCase() === 'INADIMPLENTE');
@@ -354,7 +445,7 @@ export default function Dashboard({ regras, polos, poloLabels, corPolo, tarefas,
     }
     if (onAbrirMetrica) {
       const sub = criterio === 'faturamento'
-        ? `Polo Regional com ${base.membros} membros vinculados • Faturamento: R$ ${(base.totalFaturamento || 0).toLocaleString('pt-BR')} • Adimplência: ${(base.taxaAdimplencia || 0).toFixed(1)}%`
+        ? `Polo Regional com ${base.membros} membros vinculados • Faturamento: R$ ${(base.totalFaturamento || 0).toLocaleString('pt-BR')} • Adimplência: ${fmtPct(base.taxaAdimplencia)}`
         : `Polo Regional com ${base.membros} membros vinculados (${base.total || 0} tarefas)`;
       onAbrirMetrica({ titulo: `Tarefas – ${poloLabels[base.codigo] || base.codigo}`, subtitulo: sub, tarefas: base.tarefas, cor: corPolo[base.codigo] || '#5b9bdb', polo: base.codigo });
     } else if (onAbrirPolo) onAbrirPolo(base.codigo, base.tarefas);
@@ -457,8 +548,8 @@ export default function Dashboard({ regras, polos, poloLabels, corPolo, tarefas,
                 </div>
                 <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(199,199,199,0.12)', borderRadius: '9px', padding: '12px 14px' }}>
                   <div style={s('font-size:11px;color:rgba(236,230,216,0.5);')}>Taxa de Adimplência</div>
-                  <div style={{ fontSize: '20px', fontWeight: 700, color: (destaque.taxaAdimplencia || 0) >= 75 ? '#5fc9a8' : '#f5dd90', marginTop: '4px' }}>
-                    {(destaque.taxaAdimplencia || 0).toFixed(1)}%
+                  <div style={{ fontSize: '20px', fontWeight: 700, color: corTaxa(destaque.taxaAdimplencia), marginTop: '4px' }}>
+                    {fmtPct(destaque.taxaAdimplencia)}
                   </div>
                   <div style={s('font-size:10.5px;color:rgba(236,230,216,0.45);margin-top:2px;')}>
                     {destaque.adimplentesCount || 0} adimplentes / {destaque.inadimplentesCount || 0} inadimplentes
@@ -488,13 +579,13 @@ export default function Dashboard({ regras, polos, poloLabels, corPolo, tarefas,
                 </div>
                 <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(199,199,199,0.12)', borderRadius: '9px', padding: '12px 14px' }}>
                   <div style={s('font-size:11px;color:rgba(236,230,216,0.5);')}>Taxa de Atraso</div>
-                  <div style={s('font-size:20px;font-weight:700;color:#e0796f;margin-top:4px;')}>{(destaque.taxaAtraso || 0).toFixed(1)}%</div>
+                  <div style={{ fontSize: '20px', fontWeight: 700, color: corTaxaInversa(destaque.taxaAtraso), marginTop: '4px' }}>{fmtPct(destaque.taxaAtraso)}</div>
                   <div style={s('font-size:10.5px;color:rgba(236,230,216,0.45);margin-top:2px;')}>{destaque.atrasadas || 0} de {destaque.total || 0} atrasadas</div>
                 </div>
                 <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(199,199,199,0.12)', borderRadius: '9px', padding: '12px 14px' }}>
                   <div style={s('font-size:11px;color:rgba(236,230,216,0.5);')}>Concluídas / No Prazo</div>
                   <div style={s('font-size:20px;font-weight:700;color:#5fc9a8;margin-top:4px;')}>{(destaque.concluidas || 0).toLocaleString('pt-BR')}</div>
-                  <div style={s('font-size:10.5px;color:rgba(236,230,216,0.45);margin-top:2px;')}>{(destaque.rapidez || 0).toFixed(1)}% de conformidade</div>
+                  <div style={s('font-size:10.5px;color:rgba(236,230,216,0.45);margin-top:2px;')}>{fmtPct(destaque.conformidadePrazo)} de conformidade de prazo</div>
                 </div>
                 <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(199,199,199,0.12)', borderRadius: '9px', padding: '12px 14px' }}>
                   <div style={s('font-size:11px;color:rgba(236,230,216,0.5);')}>Membros Vinculados</div>
@@ -524,9 +615,13 @@ export default function Dashboard({ regras, polos, poloLabels, corPolo, tarefas,
           }}
         >
           <option value="taxa_atraso">Taxa de Atraso</option>
-          <option value="rapidez_atendimento">Rapidez de Atendimento</option>
+          <option value="rapidez_atendimento">Conformidade de Prazo</option>
+          {/* "Projeção de Atendimento" removida: as séries MM7/MM15/MM30 eram
+              geradas somando constantes fixas ao valor atual (não havia — e não
+              há — série histórica no banco), então todo polo desenhava a mesma
+              curva e os três horizontes exibiam sempre o mesmo número. Volta
+              quando existir a tabela de snapshot diário. */}
           <option value="quantidade_tarefas">Quantidade de Tarefas</option>
-          <option value="projecao_atendimento">Projeção de Atendimento</option>
           <option value="faturamento">Faturamento (Adimplência / Asaas)</option>
         </select>
       </div>
@@ -538,16 +633,16 @@ export default function Dashboard({ regras, polos, poloLabels, corPolo, tarefas,
           const isProjecao = criterio === 'projecao_atendimento';
 
           let labelMetrica = 'Taxa de atraso';
-          let valorMetrica = `${base.taxaAtraso.toFixed(1)}%`;
-          let corMetrica = base.taxaAtraso > 50 ? '#e0796f' : '#5fc9a8';
-          let pctBarra = Math.max(4, 100 - base.taxaAtraso);
+          let valorMetrica = fmtPct(base.taxaAtraso);
+          let corMetrica = corTaxaInversa(base.taxaAtraso);
+          let pctBarra = base.taxaAtraso === null ? 0 : Math.max(4, 100 - base.taxaAtraso);
           let corBarra = '#5fc9a8';
 
           if (criterio === 'rapidez_atendimento') {
             labelMetrica = 'Rapidez / No prazo';
-            valorMetrica = `${base.rapidez.toFixed(1)}%`;
-            corMetrica = base.rapidez >= 50 ? '#5fc9a8' : '#e0796f';
-            pctBarra = Math.max(4, base.rapidez);
+            valorMetrica = fmtPct(base.conformidadePrazo);
+            corMetrica = corTaxa(base.conformidadePrazo);
+            pctBarra = base.conformidadePrazo === null ? 0 : Math.max(4, base.conformidadePrazo);
             corBarra = '#5fc9a8';
           } else if (criterio === 'quantidade_tarefas') {
             labelMetrica = '% Volume';
@@ -557,13 +652,13 @@ export default function Dashboard({ regras, polos, poloLabels, corPolo, tarefas,
             corBarra = '#5b9bdb';
           } else if (criterio === 'projecao_atendimento') {
             labelMetrica = 'Projeção 30d';
-            valorMetrica = `${base.rapidez.toFixed(0)}% prev.`;
+            valorMetrica = fmtPct(base.conformidadePrazo, 0);
             corMetrica = '#f5dd90';
           } else if (criterio === 'faturamento') {
             labelMetrica = 'Adimplência';
-            valorMetrica = `${base.taxaAdimplencia.toFixed(1)}%`;
-            corMetrica = base.taxaAdimplencia >= 75 ? '#5fc9a8' : (base.taxaAdimplencia >= 50 ? '#f5dd90' : '#e0796f');
-            pctBarra = Math.max(4, base.taxaAdimplencia);
+            valorMetrica = fmtPct(base.taxaAdimplencia);
+            corMetrica = corTaxa(base.taxaAdimplencia);
+            pctBarra = base.taxaAdimplencia === null ? 0 : Math.max(4, base.taxaAdimplencia);
             corBarra = corMetrica;
           }
 
@@ -647,7 +742,7 @@ export default function Dashboard({ regras, polos, poloLabels, corPolo, tarefas,
                       </span>
                     </div>
                     <div style={s('height:5px;background:rgba(224,121,111,0.3);border-radius:99px;overflow:hidden;display:flex;')}>
-                      <div style={{ height: '100%', background: '#5fc9a8', borderRadius: '99px', width: `${Math.max(0, Math.min(100, base.taxaAdimplencia || 0))}%` }} />
+                      <div style={{ height: '100%', background: '#5fc9a8', borderRadius: '99px', width: `${base.taxaAdimplencia === null ? 0 : Math.max(0, Math.min(100, base.taxaAdimplencia))}%` }} />
                     </div>
                   </div>
                 ) : (
@@ -811,15 +906,9 @@ export default function Dashboard({ regras, polos, poloLabels, corPolo, tarefas,
                 let posicaoTexto = `${index + 1}º`;
                 let corPosicao = 'rgba(236,230,216,0.6)';
 
-                if (index === 0) {
-                  posicaoTexto = '★ 1º';
-                  corPosicao = '#f5dd90';
-                } else if (index === 1) {
-                  posicaoTexto = '★ 2º';
-                  corPosicao = '#d8d8d8';
-                } else if (index === 2) {
-                  posicaoTexto = '★ 3º';
-                  corPosicao = '#cd7f32';
+                if (premiaTopo && index < 3) {
+                  posicaoTexto = `★ ${index + 1}º`;
+                  corPosicao = ['#f5dd90', '#d8d8d8', '#cd7f32'][index];
                 }
 
                 return (
@@ -885,8 +974,8 @@ export default function Dashboard({ regras, polos, poloLabels, corPolo, tarefas,
                     <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 600, color: '#f5dd90', fontVariantNumeric: 'tabular-nums' }}>
                       R$ {(p.totalFaturamento || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                     </td>
-                    <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 600, color: (p.taxaAdimplencia || 0) >= 75 ? '#5fc9a8' : ((p.taxaAdimplencia || 0) >= 50 ? '#f5dd90' : '#e0796f'), fontVariantNumeric: 'tabular-nums' }}>
-                      {(p.taxaAdimplencia || 0).toFixed(1)}%
+                    <td style={{ padding: '12px 16px', textAlign: 'right', fontWeight: 600, color: corTaxa(p.taxaAdimplencia), fontVariantNumeric: 'tabular-nums' }}>
+                      {fmtPct(p.taxaAdimplencia)}
                     </td>
                     <td style={{ padding: '12px 16px', textAlign: 'right' }}>
                       <span

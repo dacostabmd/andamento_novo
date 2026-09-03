@@ -7,10 +7,20 @@ import { s } from '../style.js';
 // financeira conhecida). Nesse caso exibimos "—" em vez de um 0% ou 100% que
 // seriam lidos como desempenho real.
 const fmtPct = (v, casas = 1) => (v === null || v === undefined || isNaN(v) ? '—' : v.toFixed(casas) + '%');
-const pctParaExcel = (v, casas = 1) => (v === null || v === undefined || isNaN(v) ? '' : Number(v.toFixed(casas)));
+// Texto '—' em vez de célula vazia: o Excel conta célula vazia como zero em
+// MÉDIA()/SOMA() e numa tabela dinâmica, o que puxaria as médias para baixo com
+// linhas que na verdade não têm dado. Texto é ignorado por essas funções.
+const pctParaExcel = (v, casas = 1) => (v === null || v === undefined || isNaN(v) ? '—' : Number(v.toFixed(casas)));
 // Cor neutra quando a taxa é indeterminada, para não sinalizar sucesso/erro falso.
-const corTaxa = (v, limite = 70) =>
-  v === null || v === undefined || isNaN(v) ? 'rgba(236,230,216,0.35)' : v >= limite ? '#5fc9a8' : '#f5dd90';
+const corTaxa = (v, limite = 70, n = null) =>
+  v === null || v === undefined || isNaN(v) || (n !== null && n < N_MINIMO_TAXA)
+    ? 'rgba(236,230,216,0.35)'
+    : v >= limite ? '#5fc9a8' : '#f5dd90';
+
+// Abaixo deste n a taxa não é comparável: 1 caso adimplente vira "100%" e, sem
+// marcação, fica visualmente igual a quem tem centenas de casos e 92%.
+const N_MINIMO_TAXA = 5;
+const amostraPequena = (n) => typeof n === 'number' && n > 0 && n < N_MINIMO_TAXA;
 
 export default function Relatorios({
   tarefas = [],
@@ -334,12 +344,13 @@ export default function Relatorios({
       const cobNome = t.equipeCobrancaColaboradorNome || t.colaboradorNome || t.responsavelNome;
       if (cobNome && cobNome !== '—' && cobNome !== 'Cobrador não definido') {
         if (!mapaCobradores.has(cobNome)) {
-          mapaCobradores.set(cobNome, { nome: cobNome, faturamento: 0, faturamentoAdimp: 0, faturamentoInad: 0, tarefas: 0, concluidas: 0 });
+          mapaCobradores.set(cobNome, { nome: cobNome, faturamento: 0, faturamentoAdimp: 0, faturamentoInad: 0, tarefas: 0, concluidas: 0, casosComSit: 0 });
         }
         const c = mapaCobradores.get(cobNome);
         c.faturamento += val;
         if (isAdimp) c.faturamentoAdimp += val;
         else if (isInad) c.faturamentoInad += val;
+        if (isAdimp || isInad) c.casosComSit++;
         c.tarefas++;
         if (isConcluida) c.concluidas++;
       }
@@ -347,12 +358,13 @@ export default function Relatorios({
       const advNome = t.equipeCobrancaAdvogado || t.advogado;
       if (advNome && advNome !== '—' && advNome !== 'Sem advogado') {
         if (!mapaAdvogados.has(advNome)) {
-          mapaAdvogados.set(advNome, { nome: advNome, faturamento: 0, faturamentoAdimp: 0, faturamentoInad: 0, tarefas: 0, concluidas: 0 });
+          mapaAdvogados.set(advNome, { nome: advNome, faturamento: 0, faturamentoAdimp: 0, faturamentoInad: 0, tarefas: 0, concluidas: 0, casosComSit: 0 });
         }
         const a = mapaAdvogados.get(advNome);
         a.faturamento += val;
         if (isAdimp) a.faturamentoAdimp += val;
         else if (isInad) a.faturamentoInad += val;
+        if (isAdimp || isInad) a.casosComSit++;
         a.tarefas++;
         if (isConcluida) a.concluidas++;
       }
@@ -855,8 +867,12 @@ export default function Relatorios({
             </thead>
             <tbody>
               {relatorioTimes.map((t, idx) => {
-                const medalha = idx === 0 ? '★ 1º' : idx === 1 ? '★ 2º' : idx === 2 ? '★ 3º' : (idx + 1) + 'º';
-                const corMedalha = idx === 0 ? '#f5dd90' : idx === 1 ? '#d8d8d8' : idx === 2 ? '#cd7f32' : 'rgba(236,230,216,0.6)';
+                // Sem medalha de pódio: esta tabela é ordenada por faturamento
+                // total, que reflete o tamanho da carteira atribuída — uma
+                // decisão administrativa, não um resultado do time. Premiar o
+                // topo com ouro/prata/bronze sugeria mérito onde há só volume.
+                const medalha = (idx + 1) + 'º';
+                const corMedalha = 'rgba(236,230,216,0.6)';
                 return (
                   <tr
                     key={t.id}
@@ -931,8 +947,11 @@ export default function Relatorios({
                     <div style={{ fontSize: '13px', fontWeight: 800, color: '#f5dd90' }}>
                       R$ {cob.faturamento.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                     </div>
-                    <div style={{ fontSize: '10px', color: corTaxa(cob.taxaAdimplencia), marginTop: '2px' }}>
+                    <div style={{ fontSize: '10px', color: corTaxa(cob.taxaAdimplencia, 70, cob.casosComSit), marginTop: '2px' }}>
                       {fmtPct(cob.taxaAdimplencia, 0)} adimplência
+                      {amostraPequena(cob.casosComSit) && (
+                        <span style={{ color: 'rgba(236,230,216,0.4)' }}> (n={cob.casosComSit})</span>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -973,8 +992,11 @@ export default function Relatorios({
                     <div style={{ fontSize: '13px', fontWeight: 800, color: '#f5dd90' }}>
                       R$ {adv.faturamento.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                     </div>
-                    <div style={{ fontSize: '10px', color: corTaxa(adv.taxaAdimplencia), marginTop: '2px' }}>
+                    <div style={{ fontSize: '10px', color: corTaxa(adv.taxaAdimplencia, 70, adv.casosComSit), marginTop: '2px' }}>
                       {fmtPct(adv.taxaAdimplencia, 0)} adimplência
+                      {amostraPequena(adv.casosComSit) && (
+                        <span style={{ color: 'rgba(236,230,216,0.4)' }}> (n={adv.casosComSit})</span>
+                      )}
                     </div>
                   </div>
                 </div>
