@@ -3,6 +3,15 @@ import * as XLSX from 'xlsx';
 import { IconDownload, IconPrinter } from './Icons.jsx';
 import { s } from '../style.js';
 
+// Taxas de adimplência podem ser indeterminadas (sem faturamento com situação
+// financeira conhecida). Nesse caso exibimos "—" em vez de um 0% ou 100% que
+// seriam lidos como desempenho real.
+const fmtPct = (v, casas = 1) => (v === null || v === undefined || isNaN(v) ? '—' : v.toFixed(casas) + '%');
+const pctParaExcel = (v, casas = 1) => (v === null || v === undefined || isNaN(v) ? '' : Number(v.toFixed(casas)));
+// Cor neutra quando a taxa é indeterminada, para não sinalizar sucesso/erro falso.
+const corTaxa = (v, limite = 70) =>
+  v === null || v === undefined || isNaN(v) ? 'rgba(236,230,216,0.35)' : v >= limite ? '#5fc9a8' : '#f5dd90';
+
 export default function Relatorios({
   tarefas = [],
   regras = [],
@@ -17,7 +26,7 @@ export default function Relatorios({
   const [paginaTarefas, setPaginaTarefas] = useState(1);
 
   // 1. Filtrar tarefas pela janela de dias
-  const { tarefasFiltradas, dataInicioTexto, dataFimTexto } = useMemo(() => {
+  const { tarefasFiltradas, dataInicioTexto, dataFimTexto, semDataRef } = useMemo(() => {
     const agora = Date.now();
     const dataFim = new Date(agora).toLocaleDateString('pt-BR');
 
@@ -26,6 +35,7 @@ export default function Relatorios({
         tarefasFiltradas: tarefas,
         dataInicioTexto: 'Início do histórico',
         dataFimTexto: dataFim,
+        semDataRef: 0,
       };
     }
 
@@ -33,17 +43,26 @@ export default function Relatorios({
     const dataCorte = agora - limiteMs;
     const dataInicio = new Date(dataCorte).toLocaleDateString('pt-BR');
 
+    // Tarefas sem data confiável NÃO entram na janela: incluí-las inflava
+    // artificialmente qualquer recorte de período (uma tarefa sem data aparecia
+    // igualmente em "7 dias" e em "30 dias"). Elas são contabilizadas à parte
+    // para que o volume descartado seja auditável na interface.
+    let semDataRef = 0;
     const filtradas = tarefas.filter((t) => {
       const dataRef = t.criadoEm || t.atualizadoEm || t.primeiraAtividadeEm;
-      if (!dataRef) return true;
-      const tMs = new Date(dataRef).getTime();
-      return !isNaN(tMs) ? tMs >= dataCorte : true;
+      const tMs = dataRef ? new Date(dataRef).getTime() : NaN;
+      if (!dataRef || isNaN(tMs)) {
+        semDataRef++;
+        return false;
+      }
+      return tMs >= dataCorte;
     });
 
     return {
       tarefasFiltradas: filtradas,
       dataInicioTexto: dataInicio,
       dataFimTexto: dataFim,
+      semDataRef,
     };
   }, [tarefas, diasFiltro]);
 
@@ -82,9 +101,21 @@ export default function Relatorios({
 
     const total = tarefasFiltradas.length;
     const totalComSit = totalAdimplente + totalInadimplente;
-    const taxaAdimplencia = totalComSit > 0
-      ? (totalAdimplente / totalComSit) * 100
-      : (countAdimplentes + countInadimplentes > 0 ? (countAdimplentes / (countAdimplentes + countInadimplentes)) * 100 : 100);
+    const countComSit = countAdimplentes + countInadimplentes;
+
+    // Duas taxas DISTINTAS, nunca intercambiáveis:
+    //  - taxaAdimplencia      → ponderada por VALOR (R$ adimplente / R$ com situação)
+    //  - taxaAdimplenciaCasos → contagem de CASOS (cards adimplentes / cards com situação)
+    // Antes um único número por valor era exibido junto de uma legenda por casos,
+    // o que fazia o card afirmar "68,7%" acima de uma evidência de 25%.
+    // null = indeterminado (sem base de cálculo); a UI mostra "—", nunca 100%.
+    const taxaAdimplencia = totalComSit > 0 ? (totalAdimplente / totalComSit) * 100 : null;
+    const taxaAdimplenciaCasos = countComSit > 0 ? (countAdimplentes / countComSit) * 100 : null;
+
+    // Cobertura: fração do faturamento que possui situação financeira conhecida.
+    // Sem isso, a taxa de adimplência é lida como se valesse para a carteira toda.
+    const coberturaSituacao = totalFaturamento > 0 ? (totalComSit / totalFaturamento) * 100 : 0;
+    const faturamentoSemSituacao = totalFaturamento - totalComSit;
 
     const taxaConclusao = total > 0 ? (concluidas / total) * 100 : 0;
     const taxaAtraso = total > 0 ? (atrasadas / total) * 100 : 0;
@@ -102,28 +133,36 @@ export default function Relatorios({
       totalInadimplente,
       countAdimplentes,
       countInadimplentes,
+      countComSit,
       taxaAdimplencia,
+      taxaAdimplenciaCasos,
+      coberturaSituacao,
+      faturamentoSemSituacao,
     };
   }, [tarefasFiltradas]);
 
   // 3. Métricas por Polo Regional
+  //
+  // A tabela de polos DEVE reconciliar com os cards do topo. Antes, tarefas cujo
+  // poloCobranca não resolvia para nenhum código conhecido simplesmente sumiam da
+  // tabela enquanto continuavam somando nos KPIs globais — a diferença chegava a
+  // 33% do volume e 41% das tarefas atrasadas. Agrupamos essas órfãs numa linha
+  // explícita "Sem vínculo regional" para que a soma feche e o passivo apareça.
   const relatorioPolos = useMemo(() => {
-    return polos.map((p) => {
-      const membros = regras.filter((r) => r.polo === p.codigo);
-      const tarefasDoPolo = tarefasFiltradas.filter((t) => t.poloCobranca === p.codigo);
+    const codigosConhecidos = new Set(polos.map((p) => p.codigo));
 
+    const agregar = (lista) => {
       let totalFaturamento = 0;
       let totalAdimplente = 0;
       let totalInadimplente = 0;
       let countAdimp = 0;
       let countInad = 0;
-
       let concluidas = 0;
       let atrasadas = 0;
       let noPrazo = 0;
       let escalao48h = 0;
 
-      for (const t of tarefasDoPolo) {
+      for (const t of lista) {
         const val = typeof t.valorCobranca === 'number' && !isNaN(t.valorCobranca) ? t.valorCobranca : 0;
         totalFaturamento += val;
 
@@ -143,34 +182,56 @@ export default function Relatorios({
         if (t.emEscalao48h || t.ehEscalao48h) escalao48h++;
       }
 
-      const total = tarefasDoPolo.length;
+      const total = lista.length;
       const totalComSit = totalAdimplente + totalInadimplente;
-      const taxaAdimplencia = totalComSit > 0
-        ? (totalAdimplente / totalComSit) * 100
-        : (countAdimp + countInad > 0 ? (countAdimp / (countAdimp + countInad)) * 100 : 100);
-
-      const taxaConclusao = total > 0 ? (concluidas / total) * 100 : 0;
-      const taxaAtraso = total > 0 ? (atrasadas / total) * 100 : 0;
 
       return {
-        codigo: p.codigo,
-        rotulo: poloLabels[p.codigo] || p.rotulo || p.codigo,
-        membros: membros.length,
         total,
         concluidas,
         atrasadas,
         noPrazo,
         escalao48h,
-        taxaConclusao,
-        taxaAtraso,
         totalFaturamento,
         totalAdimplente,
         totalInadimplente,
         countAdimp,
         countInad,
-        taxaAdimplencia,
+        // null quando não há base de cálculo — evita que ausência de dado
+        // seja premiada como 100% de adimplência no ranking.
+        taxaAdimplencia: totalComSit > 0 ? (totalAdimplente / totalComSit) * 100 : null,
+        coberturaSituacao: totalFaturamento > 0 ? (totalComSit / totalFaturamento) * 100 : 0,
+        taxaConclusao: total > 0 ? (concluidas / total) * 100 : 0,
+        taxaAtraso: total > 0 ? (atrasadas / total) * 100 : 0,
+      };
+    };
+
+    const linhas = polos.map((p) => {
+      const membros = regras.filter((r) => r.polo === p.codigo);
+      const tarefasDoPolo = tarefasFiltradas.filter((t) => t.poloCobranca === p.codigo);
+      return {
+        codigo: p.codigo,
+        rotulo: poloLabels[p.codigo] || p.rotulo || p.codigo,
+        membros: membros.length,
+        semVinculo: false,
+        ...agregar(tarefasDoPolo),
       };
     }).sort((a, b) => (b.totalFaturamento - a.totalFaturamento) || (b.concluidas - a.concluidas));
+
+    const orfas = tarefasFiltradas.filter(
+      (t) => !t.poloCobranca || !codigosConhecidos.has(t.poloCobranca)
+    );
+
+    if (orfas.length > 0) {
+      linhas.push({
+        codigo: '__SEM_VINCULO__',
+        rotulo: 'Sem vínculo regional',
+        membros: 0,
+        semVinculo: true,
+        ...agregar(orfas),
+      });
+    }
+
+    return linhas;
   }, [polos, regras, tarefasFiltradas, poloLabels]);
 
   // 4. Métricas por Times (Cobrador ↔ Advogado por CPF)
@@ -229,9 +290,10 @@ export default function Relatorios({
 
       const total = tarefasDoTime.length;
       const totalComSit = totalAdimplente + totalInadimplente;
-      const taxaAdimplencia = totalComSit > 0
-        ? (totalAdimplente / totalComSit) * 100
-        : (countAdimp + countInad > 0 ? (countAdimp / (countAdimp + countInad)) * 100 : 100);
+      // null = sem base de cálculo. Retornar 100% aqui colocava times sem
+      // nenhum dado financeiro no topo do ranking de adimplência.
+      const taxaAdimplencia = totalComSit > 0 ? (totalAdimplente / totalComSit) * 100 : null;
+      const coberturaSituacao = totalFaturamento > 0 ? (totalComSit / totalFaturamento) * 100 : 0;
 
       const taxaConclusao = total > 0 ? (concluidas / total) * 100 : 0;
 
@@ -252,6 +314,7 @@ export default function Relatorios({
         countAdimp,
         countInad,
         taxaAdimplencia,
+        coberturaSituacao,
       };
     }).sort((a, b) => (b.totalFaturamento - a.totalFaturamento) || (b.total - a.total));
   }, [regras, tarefasFiltradas, poloLabels]);
@@ -265,16 +328,18 @@ export default function Relatorios({
       const val = typeof t.valorCobranca === 'number' && !isNaN(t.valorCobranca) ? t.valorCobranca : 0;
       const sit = (t.situacaoFinanceira || '').toUpperCase();
       const isAdimp = sit === 'ADIMPLENTE';
+      const isInad = sit === 'INADIMPLENTE';
       const isConcluida = t.situacaoPrazo === 'concluida';
 
       const cobNome = t.equipeCobrancaColaboradorNome || t.colaboradorNome || t.responsavelNome;
       if (cobNome && cobNome !== '—' && cobNome !== 'Cobrador não definido') {
         if (!mapaCobradores.has(cobNome)) {
-          mapaCobradores.set(cobNome, { nome: cobNome, faturamento: 0, faturamentoAdimp: 0, tarefas: 0, concluidas: 0 });
+          mapaCobradores.set(cobNome, { nome: cobNome, faturamento: 0, faturamentoAdimp: 0, faturamentoInad: 0, tarefas: 0, concluidas: 0 });
         }
         const c = mapaCobradores.get(cobNome);
         c.faturamento += val;
         if (isAdimp) c.faturamentoAdimp += val;
+        else if (isInad) c.faturamentoInad += val;
         c.tarefas++;
         if (isConcluida) c.concluidas++;
       }
@@ -282,21 +347,30 @@ export default function Relatorios({
       const advNome = t.equipeCobrancaAdvogado || t.advogado;
       if (advNome && advNome !== '—' && advNome !== 'Sem advogado') {
         if (!mapaAdvogados.has(advNome)) {
-          mapaAdvogados.set(advNome, { nome: advNome, faturamento: 0, faturamentoAdimp: 0, tarefas: 0, concluidas: 0 });
+          mapaAdvogados.set(advNome, { nome: advNome, faturamento: 0, faturamentoAdimp: 0, faturamentoInad: 0, tarefas: 0, concluidas: 0 });
         }
         const a = mapaAdvogados.get(advNome);
         a.faturamento += val;
         if (isAdimp) a.faturamentoAdimp += val;
+        else if (isInad) a.faturamentoInad += val;
         a.tarefas++;
         if (isConcluida) a.concluidas++;
       }
     }
 
-    const calcTaxas = (item) => ({
-      ...item,
-      taxaAdimplencia: item.faturamento > 0 ? (item.faturamentoAdimp / item.faturamento) * 100 : 100,
-      taxaConclusao: item.tarefas > 0 ? (item.concluidas / item.tarefas) * 100 : 0,
-    });
+    // A taxa de adimplência deve ter como denominador o faturamento COM situação
+    // conhecida, não o faturamento total: dividir pelo total diluía a taxa com
+    // valores sem status e a fazia parecer baixa artificialmente. E, sem base,
+    // o resultado é null (exibido como "—") em vez de um 100% enganoso.
+    const calcTaxas = (item) => {
+      const base = item.faturamentoAdimp + item.faturamentoInad;
+      return {
+        ...item,
+        taxaAdimplencia: base > 0 ? (item.faturamentoAdimp / base) * 100 : null,
+        coberturaSituacao: item.faturamento > 0 ? (base / item.faturamento) * 100 : 0,
+        taxaConclusao: item.tarefas > 0 ? (item.concluidas / item.tarefas) * 100 : 0,
+      };
+    };
 
     return {
       topCobradores: Array.from(mapaCobradores.values()).map(calcTaxas).sort((a, b) => b.faturamento - a.faturamento),
@@ -318,7 +392,10 @@ export default function Relatorios({
       ['Faturamento Total Consolidado (R$)', metricasGerais.totalFaturamento],
       ['Faturamento Adimplente (R$)', metricasGerais.totalAdimplente],
       ['Faturamento Inadimplente (R$)', metricasGerais.totalInadimplente],
-      ['Taxa de Adimplência Geral (%)', Number(metricasGerais.taxaAdimplencia.toFixed(1))],
+      ['Taxa de Adimplência Geral — por valor (%)', pctParaExcel(metricasGerais.taxaAdimplencia)],
+      ['Taxa de Adimplência Geral — por casos (%)', pctParaExcel(metricasGerais.taxaAdimplenciaCasos)],
+      ['Cobertura: % do faturamento com situação conhecida', pctParaExcel(metricasGerais.coberturaSituacao)],
+      ['Faturamento sem situação financeira (R$)', metricasGerais.faturamentoSemSituacao],
       ['Clientes/Cards Adimplentes', metricasGerais.countAdimplentes],
       ['Clientes/Cards Inadimplentes', metricasGerais.countInadimplentes],
       [],
@@ -336,7 +413,7 @@ export default function Relatorios({
 
     // Aba 2: Polos Regionais
     const dadosPolos = [
-      ['Polo Regional', 'Código', 'Colaboradores', 'Total Tarefas', 'Concluídas', 'Em Andamento', 'Atrasadas', 'Escalão 48h', 'Taxa Conclusão (%)', 'Faturamento Total (R$)', 'Faturamento Adimplente (R$)', 'Faturamento Inadimplente (R$)', 'Taxa Adimplência (%)'],
+      ['Polo Regional', 'Código', 'Colaboradores', 'Total Tarefas', 'Concluídas', 'Em Andamento', 'Atrasadas', 'Escalão 48h', 'Taxa Conclusão (%)', 'Faturamento Total (R$)', 'Faturamento Adimplente (R$)', 'Faturamento Inadimplente (R$)', 'Taxa Adimplência (%)', 'Cobertura Situação (%)'],
       ...relatorioPolos.map((p) => [
         p.rotulo,
         p.codigo,
@@ -350,7 +427,8 @@ export default function Relatorios({
         p.totalFaturamento,
         p.totalAdimplente,
         p.totalInadimplente,
-        Number(p.taxaAdimplencia.toFixed(1)),
+        pctParaExcel(p.taxaAdimplencia),
+        pctParaExcel(p.coberturaSituacao),
       ]),
     ];
     const wsPolos = XLSX.utils.aoa_to_sheet(dadosPolos);
@@ -370,7 +448,7 @@ export default function Relatorios({
         t.totalFaturamento,
         t.totalAdimplente,
         t.totalInadimplente,
-        Number(t.taxaAdimplencia.toFixed(1)),
+        pctParaExcel(t.taxaAdimplencia),
       ]),
     ];
     const wsTimes = XLSX.utils.aoa_to_sheet(dadosTimes);
@@ -387,7 +465,7 @@ export default function Relatorios({
         Number(c.taxaConclusao.toFixed(1)),
         c.faturamento,
         c.faturamentoAdimp,
-        Number(c.taxaAdimplencia.toFixed(1)),
+        pctParaExcel(c.taxaAdimplencia),
       ]),
       ...topAdvogados.map((a) => [
         'Advogado',
@@ -397,7 +475,7 @@ export default function Relatorios({
         Number(a.taxaConclusao.toFixed(1)),
         a.faturamento,
         a.faturamentoAdimp,
-        Number(a.taxaAdimplencia.toFixed(1)),
+        pctParaExcel(a.taxaAdimplencia),
       ]),
     ];
     const wsColabs = XLSX.utils.aoa_to_sheet(dadosColabs);
@@ -442,7 +520,7 @@ export default function Relatorios({
       <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '24px', flexWrap: 'wrap', gap: '16px' }}>
         <div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            <span style={{ fontSize: '24px' }}>📊</span>
+            <span style={{ fontSize: '20px', color: '#f5dd90', display: 'inline-flex', alignItems: 'center' }}>◈</span>
             <div style={{ fontSize: '22px', fontWeight: 800, color: '#ECE6D8', letterSpacing: '-0.01em' }}>
               Relatórios Gerenciais & Desempenho
             </div>
@@ -560,13 +638,16 @@ export default function Relatorios({
             <span style={{ fontSize: '10.5px', fontWeight: 700, color: 'rgba(236,230,216,0.6)', letterSpacing: '0.04em' }}>
               TAXA DE ADIMPLÊNCIA
             </span>
-            <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: metricasGerais.taxaAdimplencia >= 75 ? '#5fc9a8' : '#f5dd90' }} />
+            <span style={{ width: '8px', height: '8px', borderRadius: '50%', backgroundColor: corTaxa(metricasGerais.taxaAdimplencia, 75) }} />
           </div>
-          <div style={{ fontSize: '24px', fontWeight: 800, color: metricasGerais.taxaAdimplencia >= 75 ? '#5fc9a8' : '#f5dd90' }}>
-            {metricasGerais.taxaAdimplencia.toFixed(1)}%
+          <div style={{ fontSize: '24px', fontWeight: 800, color: corTaxa(metricasGerais.taxaAdimplencia, 75) }}>
+            {fmtPct(metricasGerais.taxaAdimplencia)}
           </div>
           <div style={{ fontSize: '11px', color: 'rgba(236,230,216,0.45)', marginTop: '4px' }}>
-            {metricasGerais.countAdimplentes} adimplentes de {metricasGerais.countAdimplentes + metricasGerais.countInadimplentes} mapeados
+            por valor · {fmtPct(metricasGerais.taxaAdimplenciaCasos)} por casos ({metricasGerais.countAdimplentes.toLocaleString('pt-BR')} de {metricasGerais.countComSit.toLocaleString('pt-BR')})
+          </div>
+          <div style={{ fontSize: '10.5px', color: 'rgba(245,221,144,0.75)', marginTop: '3px' }}>
+            Base: {fmtPct(metricasGerais.coberturaSituacao, 0)} do faturamento tem situação conhecida
           </div>
         </div>
 
@@ -640,6 +721,15 @@ export default function Relatorios({
           <span style={{ color: 'rgba(236,230,216,0.5)', fontSize: '12px' }}>Escalão 48h: </span>
           <strong style={{ color: '#f5dd90', fontSize: '14px' }}>{metricasGerais.escalao48h.toLocaleString('pt-BR')}</strong>
         </div>
+        {semDataRef > 0 && (
+          <div
+            title="Tarefas sem data de referência confiável. Ficam fora de qualquer recorte por período para não inflar a janela selecionada."
+            style={{ color: 'rgba(236,230,216,0.4)', fontSize: '11px' }}
+          >
+            <span>Fora do período (sem data): </span>
+            <strong style={{ color: 'rgba(236,230,216,0.6)' }}>{semDataRef.toLocaleString('pt-BR')}</strong>
+          </div>
+        )}
       </div>
 
       {/* ─── NAVEGAÇÃO ENTRE ABAS DE RELATÓRIO ─── */}
@@ -698,14 +788,26 @@ export default function Relatorios({
                   key={p.codigo}
                   style={{
                     borderBottom: '1px solid rgba(199,199,199,0.06)',
-                    background: idx % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.01)',
+                    background: p.semVinculo
+                      ? 'rgba(245,221,144,0.06)'
+                      : idx % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.01)',
                   }}
                 >
                   <td style={{ padding: '12px 16px', fontWeight: 700, color: '#ECE6D8' }}>
-                    <span style={{ color: corPolo[p.codigo] || '#5b9bdb', marginRight: '6px' }}>●</span>
+                    <span style={{ color: p.semVinculo ? '#f5dd90' : (corPolo[p.codigo] || '#5b9bdb'), marginRight: '6px' }}>
+                      {p.semVinculo ? '▲' : '●'}
+                    </span>
                     <span>{p.rotulo}</span>
+                    {p.semVinculo && (
+                      <span
+                        title="Tarefas cujo polo regional não pôde ser resolvido. Aparecem aqui para que a tabela feche com os totais do topo."
+                        style={{ marginLeft: '8px', fontSize: '10px', fontWeight: 700, color: '#f5dd90', background: 'rgba(245,221,144,0.12)', border: '1px solid rgba(245,221,144,0.3)', borderRadius: '4px', padding: '2px 6px' }}
+                      >
+                        NÃO ROTEADO
+                      </span>
+                    )}
                   </td>
-                  <td style={{ padding: '12px 10px', textAlign: 'center', color: 'rgba(236,230,216,0.6)' }}>{p.membros}</td>
+                  <td style={{ padding: '12px 10px', textAlign: 'center', color: 'rgba(236,230,216,0.6)' }}>{p.semVinculo ? '—' : p.membros}</td>
                   <td style={{ padding: '12px 12px', textAlign: 'right', fontWeight: 600 }}>{p.total.toLocaleString('pt-BR')}</td>
                   <td style={{ padding: '12px 12px', textAlign: 'right', color: '#5fc9a8', fontWeight: 600 }}>{p.concluidas.toLocaleString('pt-BR')}</td>
                   <td style={{ padding: '12px 12px', textAlign: 'right', color: '#e0796f', fontWeight: 600 }}>{p.atrasadas.toLocaleString('pt-BR')}</td>
@@ -718,8 +820,11 @@ export default function Relatorios({
                   <td style={{ padding: '12px 12px', textAlign: 'right', color: '#e0796f', fontWeight: 600 }}>
                     R$ {p.totalInadimplente.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                   </td>
-                  <td style={{ padding: '12px 14px', textAlign: 'right', fontWeight: 700, color: p.taxaAdimplencia >= 70 ? '#5fc9a8' : '#f5dd90' }}>
-                    {p.taxaAdimplencia.toFixed(1)}%
+                  <td style={{ padding: '12px 14px', textAlign: 'right', fontWeight: 700, color: corTaxa(p.taxaAdimplencia) }}>
+                    {fmtPct(p.taxaAdimplencia)}
+                    <div style={{ fontSize: '9.5px', fontWeight: 600, color: 'rgba(236,230,216,0.4)', marginTop: '2px' }}>
+                      base {fmtPct(p.coberturaSituacao, 0)}
+                    </div>
                   </td>
                   <td style={{ padding: '12px 14px', textAlign: 'right', fontWeight: 600, color: 'rgba(236,230,216,0.85)' }}>
                     {p.taxaConclusao.toFixed(1)}%
@@ -750,7 +855,8 @@ export default function Relatorios({
             </thead>
             <tbody>
               {relatorioTimes.map((t, idx) => {
-                const medalha = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : (idx + 1) + 'º';
+                const medalha = idx === 0 ? '★ 1º' : idx === 1 ? '★ 2º' : idx === 2 ? '★ 3º' : (idx + 1) + 'º';
+                const corMedalha = idx === 0 ? '#f5dd90' : idx === 1 ? '#d8d8d8' : idx === 2 ? '#cd7f32' : 'rgba(236,230,216,0.6)';
                 return (
                   <tr
                     key={t.id}
@@ -759,11 +865,11 @@ export default function Relatorios({
                       background: idx % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.01)',
                     }}
                   >
-                    <td style={{ padding: '12px 14px', fontWeight: 800, textAlign: 'center' }}>{medalha}</td>
+                    <td style={{ padding: '12px 14px', fontWeight: 800, textAlign: 'center', color: corMedalha }}>{medalha}</td>
                     <td style={{ padding: '12px 14px', fontWeight: 600, color: '#ECE6D8' }}>{t.poloRotulo}</td>
                     <td style={{ padding: '12px 14px' }}>
-                      <div style={{ fontWeight: 700, color: '#ECE6D8' }}>💼 {t.cobrador}</div>
-                      <div style={{ fontSize: '11px', color: 'rgba(236,230,216,0.5)', marginTop: '2px' }}>⚖️ {t.advogado}</div>
+                      <div style={{ fontWeight: 700, color: '#ECE6D8' }}><span style={{ color: '#5b9bdb', marginRight: '6px' }}>◈</span>{t.cobrador}</div>
+                      <div style={{ fontSize: '11px', color: 'rgba(236,230,216,0.5)', marginTop: '2px' }}><span style={{ color: '#f5dd90', marginRight: '6px', fontWeight: 700 }}>§</span>{t.advogado}</div>
                     </td>
                     <td style={{ padding: '12px 12px' }}>
                       <span style={{ background: 'rgba(245,221,144,0.1)', color: '#f5dd90', border: '1px solid rgba(245,221,144,0.25)', borderRadius: '4px', padding: '2px 7px', fontSize: '10.5px', fontWeight: 700 }}>
@@ -778,8 +884,8 @@ export default function Relatorios({
                     <td style={{ padding: '12px 12px', textAlign: 'right', color: '#5fc9a8', fontWeight: 600 }}>
                       R$ {t.totalAdimplente.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                     </td>
-                    <td style={{ padding: '12px 14px', textAlign: 'right', fontWeight: 700, color: t.taxaAdimplencia >= 70 ? '#5fc9a8' : '#f5dd90' }}>
-                      {t.taxaAdimplencia.toFixed(1)}%
+                    <td style={{ padding: '12px 14px', textAlign: 'right', fontWeight: 700, color: corTaxa(t.taxaAdimplencia) }}>
+                      {fmtPct(t.taxaAdimplencia)}
                     </td>
                   </tr>
                 );
@@ -795,7 +901,7 @@ export default function Relatorios({
           {/* Top Cobradores */}
           <div style={{ background: '#111', border: '1px solid rgba(199,199,199,0.12)', borderRadius: '12px', padding: '16px' }}>
             <div style={{ fontSize: '14px', fontWeight: 800, color: '#ECE6D8', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <span>💼</span>
+              <span style={{ color: '#5b9bdb', fontSize: '14px' }}>◈</span>
               <span>Top Cobradores no Período</span>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '420px', overflowY: 'auto' }}>
@@ -825,8 +931,8 @@ export default function Relatorios({
                     <div style={{ fontSize: '13px', fontWeight: 800, color: '#f5dd90' }}>
                       R$ {cob.faturamento.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                     </div>
-                    <div style={{ fontSize: '10px', color: cob.taxaAdimplencia >= 70 ? '#5fc9a8' : 'rgba(236,230,216,0.6)', marginTop: '2px' }}>
-                      {cob.taxaAdimplencia.toFixed(0)}% adimplência
+                    <div style={{ fontSize: '10px', color: corTaxa(cob.taxaAdimplencia), marginTop: '2px' }}>
+                      {fmtPct(cob.taxaAdimplencia, 0)} adimplência
                     </div>
                   </div>
                 </div>
@@ -837,7 +943,7 @@ export default function Relatorios({
           {/* Top Advogados */}
           <div style={{ background: '#111', border: '1px solid rgba(199,199,199,0.12)', borderRadius: '12px', padding: '16px' }}>
             <div style={{ fontSize: '14px', fontWeight: 800, color: '#ECE6D8', marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <span>⚖️</span>
+              <span style={{ color: '#f5dd90', fontSize: '14px', fontWeight: 700 }}>§</span>
               <span>Top Advogados no Período</span>
             </div>
             <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', maxHeight: '420px', overflowY: 'auto' }}>
@@ -867,8 +973,8 @@ export default function Relatorios({
                     <div style={{ fontSize: '13px', fontWeight: 800, color: '#f5dd90' }}>
                       R$ {adv.faturamento.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}
                     </div>
-                    <div style={{ fontSize: '10px', color: adv.taxaAdimplencia >= 70 ? '#5fc9a8' : 'rgba(236,230,216,0.6)', marginTop: '2px' }}>
-                      {adv.taxaAdimplencia.toFixed(0)}% adimplência
+                    <div style={{ fontSize: '10px', color: corTaxa(adv.taxaAdimplencia), marginTop: '2px' }}>
+                      {fmtPct(adv.taxaAdimplencia, 0)} adimplência
                     </div>
                   </div>
                 </div>

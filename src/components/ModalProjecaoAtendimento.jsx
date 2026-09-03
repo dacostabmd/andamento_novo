@@ -282,7 +282,7 @@ export default function ModalProjecaoAtendimento({
           >
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '8px', paddingLeft: '12px', paddingRight: '12px' }}>
               <span style={{ fontSize: '12.5px', fontWeight: 700, color: '#ECE6D8', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                <span style={{ fontSize: '15px' }}>📈</span>
+                <span style={{ fontSize: '14px', color: '#5fc9a8' }}>↗</span>
                 <span>Curvas de Tendência Temporal</span>
               </span>
               <span style={{ fontSize: '11px', color: 'rgba(236,230,216,0.5)' }}>

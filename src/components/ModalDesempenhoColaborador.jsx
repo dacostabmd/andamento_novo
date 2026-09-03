@@ -518,10 +518,10 @@ export default function ModalDesempenhoColaborador({
                 top: '50%',
                 transform: 'translateY(-50%)',
                 color: 'rgba(236,230,216,0.4)',
-                fontSize: '13px',
+                fontSize: '14px',
               }}
             >
-              🔍
+              ⌕
             </span>
             {busca && (
               <button

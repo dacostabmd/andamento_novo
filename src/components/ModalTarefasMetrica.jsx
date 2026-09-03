@@ -555,7 +555,7 @@ export default function ModalTarefasMetrica({
               {/* Header do Ranking com Seletor de Abas */}
               <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px', flexWrap: 'wrap', gap: '8px' }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                  <span style={{ fontSize: '16px' }}>🏆</span>
+                  <span style={{ fontSize: '15px', color: '#f5dd90' }}>★</span>
                   <div>
                     <span style={{ fontSize: '13px', fontWeight: 800, color: '#f5dd90', letterSpacing: '-0.01em' }}>
                       Ranking de Faturamento deste Polo
@@ -583,7 +583,7 @@ export default function ModalTarefasMetrica({
                       transition: 'all 0.15s',
                     }}
                   >
-                    👥 Times por CPF ({timesFaturamento.length})
+                    ⬡ Times por CPF ({timesFaturamento.length})
                   </button>
                   <button
                     type="button"
@@ -600,7 +600,7 @@ export default function ModalTarefasMetrica({
                       transition: 'all 0.15s',
                     }}
                   >
-                    💼 Cobradores ({rankingFinanceiro?.cobradores?.length || 0})
+                    ◈ Cobradores ({rankingFinanceiro?.cobradores?.length || 0})
                   </button>
                   <button
                     type="button"
@@ -617,7 +617,7 @@ export default function ModalTarefasMetrica({
                       transition: 'all 0.15s',
                     }}
                   >
-                    ⚖️ Advogados ({rankingFinanceiro?.advogados?.length || 0})
+                    § Advogados ({rankingFinanceiro?.advogados?.length || 0})
                   </button>
                 </div>
               </div>
@@ -664,7 +664,8 @@ export default function ModalTarefasMetrica({
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(360px, 1fr))', gap: '8px', maxHeight: '180px', overflowY: 'auto', paddingRight: '4px' }}>
                   {timesFaturamento.map((time, idx) => {
                     const isSelected = filtroEquipeId === time.id;
-                    const medalha = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `${idx + 1}º`;
+                    const medalha = idx === 0 ? '★ 1º' : idx === 1 ? '★ 2º' : idx === 2 ? '★ 3º' : `${idx + 1}º`;
+                    const corMedalha = idx === 0 ? '#f5dd90' : idx === 1 ? '#d8d8d8' : idx === 2 ? '#cd7f32' : 'rgba(236,230,216,0.6)';
                     return (
                       <div
                         key={time.id}
@@ -691,17 +692,17 @@ export default function ModalTarefasMetrica({
                         }}
                       >
                         <div style={{ display: 'flex', alignItems: 'center', gap: '8px', minWidth: 0, flex: 1 }}>
-                          <span style={{ fontSize: '13px', fontWeight: 800, width: '22px', textAlign: 'center', flexShrink: 0 }}>
+                          <span style={{ fontSize: '11.5px', fontWeight: 800, width: '32px', textAlign: 'center', flexShrink: 0, color: corMedalha }}>
                             {medalha}
                           </span>
                           <div style={{ minWidth: 0, flex: 1 }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}>
                               <span style={{ fontSize: '12px', fontWeight: 700, color: isSelected ? '#f5dd90' : '#ECE6D8' }}>
-                                💼 {time.cobrador}
+                                <span style={{ color: '#5b9bdb', marginRight: '4px' }}>◈</span>{time.cobrador}
                               </span>
                               <span style={{ fontSize: '11px', color: 'rgba(236,230,216,0.45)' }}>↔</span>
                               <span style={{ fontSize: '12px', fontWeight: 700, color: isSelected ? '#f5dd90' : '#ECE6D8' }}>
-                                ⚖️ {time.advogado}
+                                <span style={{ color: '#f5dd90', marginRight: '4px', fontWeight: 700 }}>§</span>{time.advogado}
                               </span>
                             </div>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginTop: '3px' }}>
@@ -744,7 +745,8 @@ export default function ModalTarefasMetrica({
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '6px', maxHeight: '180px', overflowY: 'auto' }}>
                   {rankingFinanceiro.cobradores.map((cob, idx) => {
                     const isSelected = colaboradorSelecionado?.tipo === 'cobrador' && colaboradorSelecionado?.nome === cob.nome;
-                    const medalha = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `${idx + 1}º`;
+                    const medalha = idx === 0 ? '★ 1º' : idx === 1 ? '★ 2º' : idx === 2 ? '★ 3º' : `${idx + 1}º`;
+                    const corMedalha = idx === 0 ? '#f5dd90' : idx === 1 ? '#d8d8d8' : idx === 2 ? '#cd7f32' : 'rgba(236,230,216,0.6)';
                     return (
                       <div
                         key={cob.nome}
@@ -768,7 +770,7 @@ export default function ModalTarefasMetrica({
                         }}
                       >
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0 }}>
-                          <span style={{ fontSize: '11px', fontWeight: 800, width: '18px', textAlign: 'center' }}>{medalha}</span>
+                          <span style={{ fontSize: '11px', fontWeight: 800, width: '30px', textAlign: 'center', color: corMedalha }}>{medalha}</span>
                           <span style={{ fontSize: '11.5px', fontWeight: 700, color: isSelected ? '#f5dd90' : '#ECE6D8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                             {cob.nome}
                           </span>
@@ -793,7 +795,8 @@ export default function ModalTarefasMetrica({
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '6px', maxHeight: '180px', overflowY: 'auto' }}>
                   {rankingFinanceiro.advogados.map((adv, idx) => {
                     const isSelected = colaboradorSelecionado?.tipo === 'advogado' && colaboradorSelecionado?.nome === adv.nome;
-                    const medalha = idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `${idx + 1}º`;
+                    const medalha = idx === 0 ? '★ 1º' : idx === 1 ? '★ 2º' : idx === 2 ? '★ 3º' : `${idx + 1}º`;
+                    const corMedalha = idx === 0 ? '#f5dd90' : idx === 1 ? '#d8d8d8' : idx === 2 ? '#cd7f32' : 'rgba(236,230,216,0.6)';
                     return (
                       <div
                         key={adv.nome}
@@ -817,7 +820,7 @@ export default function ModalTarefasMetrica({
                         }}
                       >
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', minWidth: 0 }}>
-                          <span style={{ fontSize: '11px', fontWeight: 800, width: '18px', textAlign: 'center' }}>{medalha}</span>
+                          <span style={{ fontSize: '11px', fontWeight: 800, width: '30px', textAlign: 'center', color: corMedalha }}>{medalha}</span>
                           <span style={{ fontSize: '11.5px', fontWeight: 700, color: isSelected ? '#f5dd90' : '#ECE6D8', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                             {adv.nome}
                           </span>
