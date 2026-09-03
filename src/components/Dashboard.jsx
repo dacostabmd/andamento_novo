@@ -8,7 +8,7 @@ const CARD = 'background:rgba(255,255,255,0.02);border:1px solid rgba(199,199,19
 const CARD_LABEL = 'font-size:11px;color:rgba(236,230,216,0.5);';
 const CARD_SUB = 'font-size:10px;color:rgba(236,230,216,0.4);margin-top:2px;';
 
-function InfograficoProjecao({ dadosMM }) {
+function InfograficoProjecao({ dadosMM, isHovered = false }) {
   const width = 200;
   const height = isHovered ? 82 : 54;
 
@@ -635,7 +635,7 @@ export default function Dashboard({ regras, polos, poloLabels, corPolo, tarefas,
                 </div>
 
                 {criterio === 'projecao_atendimento' ? (
-                  <InfograficoProjecao dadosMM={base.dadosMM} />
+                  <InfograficoProjecao dadosMM={base.dadosMM} isHovered={isHovered} />
                 ) : criterio === 'faturamento' ? (
                   <div style={{ marginTop: '10px' }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '9.5px', marginBottom: '4px' }}>
